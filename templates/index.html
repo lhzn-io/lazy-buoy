@@ -3,88 +3,647 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LHZN Buoy Dashboard</title>
+    <title>LHZN Buoy - Edge Telemetry Command Center</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #0f172a; color: #f8fafc; }
-        .card { background-color: #1e293b; border: 1px solid #334155; }
+        body { 
+            background: linear-gradient(135deg, #090d16 0%, #0f172a 100%); 
+            color: #f8fafc; 
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .glass-card { 
+            background: rgba(30, 41, 59, 0.45); 
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(56, 189, 248, 0.2);
+            box-shadow: 0 12px 40px 0 rgba(56, 189, 248, 0.12);
+            transform: translateY(-2px);
+        }
+        /* Custom indicator styles */
+        .status-dot {
+            box-shadow: 0 0 8px currentColor;
+        }
+        /* Wave animation on background of buoy visualizer */
+        @keyframes wave-flow {
+            0% { transform: translateX(0) translateZ(0) scaleY(1); }
+            50% { transform: translateX(-25%) translateZ(0) scaleY(0.9); }
+            100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+        }
+        .water-wave {
+            animation: wave-flow 12s infinite linear;
+        }
     </style>
 </head>
-<body class="p-6 font-sans">
-    <header class="mb-8 flex items-center justify-between">
+<body class="p-4 md:p-6 lg:p-8">
+    <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
         <div>
-            <h1 class="text-3xl font-bold text-blue-400">LHZN Buoy</h1>
-            <p class="text-sm text-slate-400" id="last-updated">Waiting for data...</p>
+            <div class="flex items-center gap-3">
+                <div class="h-4 w-4 rounded-full bg-blue-500 status-dot text-blue-500 animate-pulse"></div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-white">
+                    LHZN Buoy <span class="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Edge Telemetry</span>
+                </h1>
+            </div>
+            <p class="text-sm text-slate-400 mt-1 font-mono" id="last-updated">System syncing...</p>
         </div>
-        <div class="flex space-x-4 text-sm">
-            <span class="rounded bg-blue-900/50 px-3 py-1 font-mono text-blue-300 border border-blue-500/30">RTK/GPS: <span id="gps-status" class="font-bold">--</span></span>
-            <span class="rounded bg-green-900/50 px-3 py-1 font-mono text-green-300 border border-green-500/30">Sol: <span id="solar-status" class="font-bold">-- W</span></span>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="rounded-full bg-blue-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-blue-300 border border-blue-500/20 flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-blue-400 status-dot text-blue-400"></span>
+                GPS: <span id="gps-status" class="font-bold">--</span> (<span id="gps-sats" class="font-bold">--</span> Sats)
+            </span>
+            <span class="rounded-full bg-emerald-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-emerald-400 status-dot text-emerald-400 animate-pulse"></span>
+                Solar: <span id="solar-status" class="font-bold">-- W</span>
+            </span>
+            <span class="rounded-full bg-slate-900/60 px-4 py-1.5 font-mono text-xs font-semibold text-slate-300 border border-slate-700/30 flex items-center gap-2">
+                Telemetry Rate: <span class="font-bold">15s</span>
+            </span>
         </div>
     </header>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Battery Voltage</h3>
-            <div class="text-3xl font-bold" id="batt-v">-- V</div>
+    <!-- Unified Dashboard Grid (Grouped by Genre / Function) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- GENRE 1: ATTITUDE & WAVE KINEMATICS (BNO08X I2C IMU) -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold tracking-wide uppercase text-blue-400 flex items-center gap-2">
+                        Wave & Attitude Dynamics
+                    </h2>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-500/10 font-mono">BNO08X IMU</span>
+                </div>
+
+                <!-- 3D Buoy Attitude Visualizer Card -->
+                <div class="relative w-full h-36 flex items-center justify-center overflow-hidden bg-slate-950/60 rounded-xl border border-slate-800/80 mb-6">
+                    <!-- Dynamic Water Background -->
+                    <div class="absolute bottom-0 w-[200%] h-12 bg-blue-600/15 border-t border-blue-500/30 water-wave"></div>
+                    <!-- Live Orientation Horizon Line -->
+                    <div class="absolute w-full h-[1px] bg-slate-800"></div>
+                    
+                    <!-- CSS Buoy Graphic -->
+                    <div id="buoy-graphic" class="relative w-14 h-24 transition-transform duration-200 ease-out" style="transform-style: preserve-3d; transform: rotate(0deg) translateY(0px);">
+                        <!-- Light beacon -->
+                        <div class="absolute left-[22px] top-0 w-3 h-3 rounded-full bg-amber-400 animate-pulse border border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.8)]"></div>
+                        <!-- Mast/Structure -->
+                        <div class="absolute left-[26px] top-[10px] w-[4px] h-[34px] bg-slate-400"></div>
+                        <!-- Center cross structure -->
+                        <div class="absolute left-[16px] top-[25px] w-[24px] h-[4px] bg-slate-500 rounded"></div>
+                        <!-- Buoy Main Body Float Ring -->
+                        <div class="absolute left-0 top-[42px] w-14 h-10 rounded-2xl bg-gradient-to-b from-red-500 to-red-600 border border-red-400/30 shadow-[0_4px_12px_rgba(239,68,68,0.4)]"></div>
+                        <!-- Center reflective stripes -->
+                        <div class="absolute left-0 top-[52px] w-14 h-3 bg-white/95"></div>
+                        <div class="absolute left-[6px] top-[53px] w-10 h-1 bg-amber-500 rounded-sm"></div>
+                    </div>
+
+                    <!-- Attitude metrics overlay -->
+                    <div class="absolute bottom-2 right-3 font-mono text-[10px] text-slate-500 flex gap-2">
+                        <span>PITCH: <span id="visual-pitch" class="text-slate-400 font-bold">0.0°</span></span>
+                        <span>ROLL: <span id="visual-roll" class="text-slate-400 font-bold">0.0°</span></span>
+                    </div>
+                </div>
+
+                <!-- Primary Attitude Euler Angles Grid -->
+                <div class="grid grid-cols-3 gap-3 mb-6 text-center">
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-blue-500/20 cursor-help" title="Heading/Yaw (Rotation around Z-axis: 0 to 360 degrees, where 0 is North)">
+                        <span class="text-slate-400 text-xs font-semibold block uppercase">Heading</span>
+                        <span class="text-xl font-bold font-mono text-white" id="imu-heading">--°</span>
+                    </div>
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-emerald-500/20 cursor-help" title="Pitch (Rotation around Y-axis: forward/backward tilt in degrees; positive indicates bow down, negative indicates bow up)">
+                        <span class="text-slate-400 text-xs font-semibold block uppercase">Pitch</span>
+                        <span class="text-xl font-bold font-mono text-emerald-400" id="imu-pitch">--°</span>
+                    </div>
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-cyan-500/20 cursor-help" title="Roll (Rotation around X-axis: left/right tilt in degrees; positive indicates port down, negative indicates port up)">
+                        <span class="text-slate-400 text-xs font-semibold block uppercase">Roll</span>
+                        <span class="text-xl font-bold font-mono text-cyan-400" id="imu-roll">--°</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Raw 9DOF Diagnostic Telemetry -->
+            <div class="border-t border-slate-800/50 pt-4 mt-auto">
+                <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">IMU Raw Tri-Axis Diagnostics</h3>
+                <div class="space-y-2 text-xs font-mono">
+                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Linear acceleration along local X, Y, and Z axes (meters per second squared, includes gravity vector)">
+                        <span class="text-slate-500 font-semibold uppercase">Accelerometer</span>
+                        <span class="text-slate-300">
+                            X: <span id="imu-ax" class="text-slate-200 font-bold">--</span> | 
+                            Y: <span id="imu-ay" class="text-slate-200 font-bold">--</span> | 
+                            Z: <span id="imu-az" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">m/s²</span>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Angular velocity around local X, Y, and Z axes (radians per second)">
+                        <span class="text-slate-500 font-semibold uppercase">Gyroscope</span>
+                        <span class="text-slate-300">
+                            X: <span id="imu-gx" class="text-slate-200 font-bold">--</span> | 
+                            Y: <span id="imu-gy" class="text-slate-200 font-bold">--</span> | 
+                            Z: <span id="imu-gz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">rad/s</span>
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Magnetic field strength along local X, Y, and Z axes (microteslas)">
+                        <span class="text-slate-500 font-semibold uppercase">Magnetometer</span>
+                        <span class="text-slate-300">
+                            X: <span id="imu-mx" class="text-slate-200 font-bold">--</span> | 
+                            Y: <span id="imu-my" class="text-slate-200 font-bold">--</span> | 
+                            Z: <span id="imu-mz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">µT</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Net Current</h3>
-            <div class="text-3xl font-bold" id="batt-i">-- mA</div>
+
+        <!-- GENRE 2: NAVIGATION & POSITIONING (RTK-GPS & ENVIRONMENT) -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
+                        Positioning & Environment
+                    </h2>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-900/30 text-indigo-300 border border-indigo-500/10 font-mono">RTK-GPS / I2C</span>
+                </div>
+
+                <!-- Navigation Primary Card -->
+                <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-5 mb-5 space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="cursor-help" title="Latitude (Decimal Degrees, positive represents North, negative represents South)">
+                            <span class="text-slate-550 text-xs font-semibold block uppercase">Latitude</span>
+                            <span class="text-lg font-bold font-mono text-white" id="gps-lat">--</span>
+                        </div>
+                        <div class="cursor-help" title="Longitude (Decimal Degrees, positive represents East, negative represents West)">
+                            <span class="text-slate-550 text-xs font-semibold block uppercase">Longitude</span>
+                            <span class="text-lg font-bold font-mono text-white" id="gps-lon">--</span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
+                        <div class="cursor-help" title="Altitude above mean sea level (meters)">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Altitude</span>
+                            <span class="text-base font-bold font-mono text-slate-200" id="gps-alt">-- m</span>
+                        </div>
+                        <div class="cursor-help" title="Geoid separation (height of geoid above the WGS84 reference ellipsoid in meters)">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Geoid Separation</span>
+                            <span class="text-base font-bold font-mono text-slate-200" id="gps-geoid">-- m</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
+                        <div class="cursor-help" title="Speed Over Ground (displayed in kilometers per hour and nautical knots)">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Speed Over Ground</span>
+                            <span class="text-base font-bold font-mono text-slate-200" id="gps-speed">-- km/h</span>
+                        </div>
+                        <div class="cursor-help" title="Course Over Ground (true track angle in degrees, clockwise relative to True North)">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Course Over Ground</span>
+                            <span class="text-base font-bold font-mono text-slate-200" id="gps-course">--°</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dilution of Precision Navigation Diagnostics -->
+                <div class="grid grid-cols-3 gap-2 text-center mb-5 bg-slate-950/20 border border-slate-800/30 rounded-xl p-3">
+                    <div class="cursor-help" title="Horizontal Dilution of Precision (horizontal geometric accuracy multiplier; lower is better, <1.0 is excellent)">
+                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">HDOP</span>
+                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-hdop">--</span>
+                    </div>
+                    <div class="cursor-help" title="Vertical Dilution of Precision (vertical geometric accuracy multiplier; lower is better, <1.0 is excellent)">
+                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">VDOP</span>
+                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-vdop">--</span>
+                    </div>
+                    <div class="cursor-help" title="Position Dilution of Precision (three-dimensional geometric accuracy multiplier; lower is better, <1.5 is excellent)">
+                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">PDOP</span>
+                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-pdop">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GENRE 2B: ENVIRONMENTAL METRICS (HTU31D) -->
+            <div class="border-t border-slate-800/50 pt-4 mt-auto">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Atmospheric Environment</h3>
+                    <span class="text-[10px] text-slate-550 font-mono">HTU31D Sensor</span>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Ambient air temperature inside the weatherproof enclosure (degrees Celsius)">
+                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Temperature</span>
+                        <span class="text-base font-bold font-mono text-white"><span id="env-t">--</span>°C</span>
+                    </div>
+                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Relative humidity (percentage of water vapor saturation in the air)">
+                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Humidity</span>
+                        <span class="text-base font-bold font-mono text-slate-200"><span id="env-h">--</span>%</span>
+                    </div>
+                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Dew Point (calculated temperature at which air moisture condenses in degrees Celsius; lower indicates drier air)">
+                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Dew Point</span>
+                        <span class="text-base font-bold font-mono text-slate-300"><span id="env-dp">--</span>°C</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Environment</h3>
-            <div class="text-xl font-bold"><span id="env-t">--</span> °C</div>
-            <div class="text-xl font-bold text-slate-300"><span id="env-h">--</span> % RH</div>
+
+        <!-- GENRE 3: POWER SYSTEMS (VICTRON MPPT VE.DIRECT) -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
+                        Solar & Battery Power
+                    </h2>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono">Victron MPPT</span>
+                </div>
+
+                <!-- Live Power Metrics Grid -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="12V battery terminal voltage (volts)">
+                        <span class="text-slate-550 text-xs font-semibold block uppercase">Battery Voltage</span>
+                        <span class="text-2xl font-bold font-mono text-white" id="batt-v">-- V</span>
+                    </div>
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="Net current flowing into or out of the battery (milliamps; positive indicates net charging, negative indicates discharge under system load)">
+                        <span class="text-slate-550 text-xs font-semibold block uppercase">Net Current</span>
+                        <span class="text-2xl font-bold font-mono text-white" id="batt-i">-- mA</span>
+                    </div>
+                </div>
+
+                <!-- Secondary Power Diagnostics -->
+                <div class="bg-slate-950/20 border border-slate-800/30 rounded-xl p-4 space-y-2.5 text-sm">
+                    <div class="flex justify-between items-center cursor-help" title="Solar panel (PV array) input voltage (volts) and active generated power (watts)">
+                        <span class="text-slate-400 text-xs uppercase font-semibold">Solar Panel PV</span>
+                        <span class="font-mono text-slate-200"><span id="vic-vpv">--</span> V / <span id="vic-ppv" class="font-bold text-emerald-400">--</span> W</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="Active charger algorithm state (e.g. Bulk, Absorption, Float, Storage, or Off)">
+                        <span class="text-slate-400 text-xs uppercase font-semibold">Charge State</span>
+                        <span class="font-mono text-blue-300 font-bold" id="vic-cs">--</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="MPPT load terminal load draw current (milliamps)">
+                        <span class="text-slate-400 text-xs uppercase font-semibold">Load Output Draw</span>
+                        <span class="font-mono text-slate-200"><span id="vic-il">--</span> mA</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Energy Yield Statistics -->
+            <div class="border-t border-slate-800/50 pt-4 mt-auto">
+                <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Energy Harvest & Yields</h3>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Daily cumulative energy yield (watt-hours) and peak power output (watts) recorded today">
+                        <span class="text-slate-550 font-semibold block">TODAY</span>
+                        <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h20">--</span> Wh</span>
+                        <span class="text-[10px] text-slate-550 block">Peak: <span id="vic-h21">--</span>W</span>
+                    </div>
+                    <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Total energy yield harvested yesterday (watt-hours) and previous day sequence identifier (days)">
+                        <span class="text-slate-550 font-semibold block">YESTERDAY</span>
+                        <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h22">--</span> Wh</span>
+                        <span class="text-[10px] text-slate-550 block">Sequence ID: <span id="vic-h23">--</span></span>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Coordinates</h3>
-            <div class="text-sm font-mono text-slate-300">Lat: <span id="gps-lat">--</span></div>
-            <div class="text-sm font-mono text-slate-300">Lon: <span id="gps-lon">--</span></div>
-            <div class="text-xs text-slate-500 mt-1">Sats: <span id="gps-sats">--</span></div>
+
+    </div>
+
+    <!-- Power Trend Time Series Graph Card (Power Systems Category) -->
+    <div class="glass-card rounded-2xl p-6 w-full mb-8">
+        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-6">
+            <div>
+                <h3 class="text-lg font-bold tracking-wide uppercase text-slate-200">Power System Historical Trends</h3>
+                <p class="text-xs text-slate-500 font-mono mt-0.5">Dual-Axis Battery Charge and Current Draw (Rolling 30 Minutes)</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs font-mono">
+                <span class="flex items-center gap-1.5 text-sky-400">
+                    <span class="h-2 w-2 rounded-full bg-sky-400 status-dot text-sky-400"></span> Voltage (V)
+                </span>
+                <span class="flex items-center gap-1.5 text-rose-400">
+                    <span class="h-2 w-2 rounded-full bg-rose-400 status-dot text-rose-400"></span> Current (mA)
+                </span>
+            </div>
+        </div>
+        <div class="h-64 sm:h-72 w-full relative">
+            <canvas id="powerChart" class="w-full h-full"></canvas>
         </div>
     </div>
 
-    <!-- NEW VICTRON METRICS SECTION -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Solar Panel</h3>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-slate-400 text-sm">Panel Voltage</span>
-                <span class="font-mono text-slate-200" id="vic-vpv">-- V</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-slate-400 text-sm">Live Power</span>
-                <span class="font-mono text-slate-200" id="vic-ppv">-- W</span>
+    <!-- VHF Transcription, Semantic Search, and Chatter Analytics Terminal -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        
+        <!-- Column 1: Search & Channel Drill-Down -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+            <div class="space-y-6">
+                <div>
+                    <div class="flex items-center justify-between mb-5">
+                        <h2 class="text-lg font-bold tracking-wide uppercase text-sky-400 flex items-center gap-2">
+                            Semantic Radio Search
+                        </h2>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-sky-900/30 text-sky-300 border border-sky-500/10 font-mono">Global Store</span>
+                    </div>
+                    
+                    <!-- Search Input Group -->
+                    <div class="space-y-2.5">
+                        <input type="text" id="semantic-search-input" placeholder="e.g. distress signal or coast guard..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-sky-500/55 transition-colors">
+                        <button onclick="performSemanticSearch()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
+                            Query Vector Store
+                        </button>
+                    </div>
+                    <div id="search-results-container" class="mt-3.5 space-y-2 text-xs max-h-36 overflow-y-auto font-mono border-t border-slate-800/40 pt-3">
+                        <p class="text-slate-500 italic">No active search matches displayed.</p>
+                    </div>
+                </div>
+
+                <!-- Channel Drill-Down Filters -->
+                <div class="border-t border-slate-800/50 pt-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Channel Drill-Down</h3>
+                        <span id="active-drilldown-label" class="text-[10px] font-mono text-indigo-400 font-bold">All Channels</span>
+                    </div>
+
+                    <!-- Channel-specific Search Query Input -->
+                    <div class="mb-4">
+                        <div class="relative">
+                            <input type="text" id="channel-query-input" placeholder="Query active channel chatter..." class="w-full bg-slate-950 border border-slate-855 rounded-xl px-4 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500/55 transition-colors" oninput="debounceChannelQuery()">
+                            <button id="clear-channel-query-btn" onclick="clearChannelQuery()" class="absolute right-3 top-2 text-slate-500 hover:text-slate-300 font-mono text-[10px] hidden">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5" id="channel-filters-container">
+                        <button onclick="setChannelFilter('all')" id="filter-btn-all" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-indigo-950/40 text-indigo-300 border-indigo-500/30">
+                            <span>ALL CHANNELS</span>
+                            <span class="rounded bg-indigo-900/40 px-2 py-0.5 font-bold" id="filter-cnt-all">0</span>
+                        </button>
+                        <button onclick="setChannelFilter('Marine-16')" id="filter-btn-m16" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                            <span>CH 16 - CALLING</span>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m16">0</span>
+                        </button>
+                        <button onclick="setChannelFilter('Marine-68')" id="filter-btn-m68" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                            <span>CH 68 - FISHING A</span>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m68">0</span>
+                        </button>
+                        <button onclick="setChannelFilter('Marine-69')" id="filter-btn-m69" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                            <span>CH 69 - FISHING B</span>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m69">0</span>
+                        </button>
+                        <button onclick="setChannelFilter('NOAA-WX1')" id="filter-btn-noaa" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                            <span>NOAA WX1 - WEATHER</span>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-noaa">0</span>
+                        </button>
+                        <button onclick="setChannelFilter('Local-Emergency')" id="filter-btn-emer" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                            <span>LOCAL EMERGENCY</span>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-emer">0</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Charge Controller</h3>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-slate-400 text-sm">State</span>
-                <span class="font-mono text-blue-300" id="vic-cs">--</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-slate-400 text-sm">System Load Draw</span>
-                <span class="font-mono text-slate-200" id="vic-il">-- mA</span>
+
+        <!-- Column 2: Channel Chatter Analytics -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
+                        Chatter Analytics
+                    </h2>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono" id="analytics-window-badge">24h Window</span>
+                </div>
+
+                <!-- Window Length Selector -->
+                <div class="grid grid-cols-4 gap-1.5 mb-5 bg-slate-950 p-1.5 rounded-xl border border-slate-800/80">
+                    <button onclick="setMetricsWindow(1)" id="window-btn-1" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">1H</button>
+                    <button onclick="setMetricsWindow(6)" id="window-btn-6" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">6H</button>
+                    <button onclick="setMetricsWindow(24)" id="window-btn-24" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-emerald-950/40 text-emerald-400 border border-emerald-500/20">24H</button>
+                    <button onclick="setMetricsWindow(168)" id="window-btn-168" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">7D</button>
+                </div>
+                
+                <p class="text-xs text-slate-400 mb-4 leading-relaxed font-mono">
+                    Real-time statistics captured across scanning frequencies.
+                </p>
+
+                <!-- Dynamic High-level stats -->
+                <div class="grid grid-cols-2 gap-3 mb-5 text-center">
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
+                        <span class="text-slate-550 text-[10px] font-bold block uppercase tracking-wider">Busiest Channel</span>
+                        <span class="text-xs font-bold font-mono text-white mt-1 block" id="analytics-busiest">--</span>
+                    </div>
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
+                        <span class="text-slate-550 text-[10px] font-bold block uppercase tracking-wider">Avg Signal SNR</span>
+                        <span class="text-xs font-bold font-mono text-emerald-400 mt-1 block" id="analytics-snr">--</span>
+                    </div>
+                </div>
+
+                <!-- Channel Volume Distribution bars -->
+                <div class="space-y-3.5">
+                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Volume Distribution</h3>
+                    
+                    <!-- Ch 16 -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-400 font-semibold">Ch 16 Calling</span>
+                            <span class="text-slate-550" id="vol-txt-m16">0 calls (0s)</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                            <div id="vol-bar-m16" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Ch 68 -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-400 font-semibold">Ch 68 Fishing A</span>
+                            <span class="text-slate-550" id="vol-txt-m68">0 calls (0s)</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                            <div id="vol-bar-m68" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Ch 69 -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-400 font-semibold">Ch 69 Fishing B</span>
+                            <span class="text-slate-550" id="vol-txt-m69">0 calls (0s)</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                            <div id="vol-bar-m69" class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- NOAA -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-400 font-semibold">NOAA Weather</span>
+                            <span class="text-slate-550" id="vol-txt-noaa">0 calls (0s)</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                            <div id="vol-bar-noaa" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Emergency -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-400 font-semibold">Local Emergency</span>
+                            <span class="text-slate-550" id="vol-txt-emer">0 calls (0s)</span>
+                        </div>
+                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                            <div id="vol-bar-emer" class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="card rounded-lg p-5">
-            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Energy Yield</h3>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-slate-400 text-sm">Today</span>
-                <span class="font-mono text-slate-200"><span id="vic-h20" class="font-bold">--</span> Wh (<span id="vic-h21">--</span>W peak)</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-slate-400 text-sm">Yesterday</span>
-                <span class="font-mono text-slate-200"><span id="vic-h22" class="font-bold">--</span> Wh</span>
+
+        <!-- Column 3: VHF Transcriptions Log -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between lg:col-span-2">
+            <div>
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
+                        VHF Transcriptions Log
+                    </h2>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/20 font-mono">Log Feed</span>
+                </div>
+                
+                <!-- Scrollable Transcripts Container -->
+                <div id="transcripts-log-feed" class="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                    <p class="text-slate-500 italic text-sm">Listening to radio channels...</p>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="card rounded-lg p-6 mb-8 w-full max-h-96">
-        <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Power Trend</h3>
-        <canvas id="powerChart" height="80"></canvas>
+    <!-- Live Telemetry & Settings Grid -->
+    <div class="flex flex-col lg:flex-row gap-6 mb-8 items-start">
+        <!-- Left: Live Telemetry Logger -->
+        <div id="json-telemetry-container-div" class="w-full lg:w-2/3">
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">Live JSON Data Payload Stream</h3>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-emerald-400 border border-emerald-950">Active Stream</span>
+                        </div>
+                        <button id="json-toggle-btn" onclick="toggleJsonTerminal()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 font-mono text-[10px] transition-colors border border-slate-700/50">Expand</button>
+                    </div>
+                    <div id="json-terminal-wrapper" class="hidden bg-slate-950 rounded-xl p-4 border border-slate-900 overflow-x-auto max-h-60 h-60">
+                        <pre class="text-xs font-mono text-emerald-500 leading-relaxed" id="json-console">Waiting for next data packet...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: System Settings & Controls (Always visible, max-w-xl to prevent over-stretching) -->
+        <div id="settings-container-div" class="w-full lg:w-1/3">
+            <div class="glass-card rounded-2xl p-6 w-full max-w-xl lg:mx-0 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                        <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">System Settings & Controls</h3>
+                        <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-sky-400 border border-sky-950">Admin Panel</span>
+                    </div>
+                    
+                    <!-- Settings Form Groups -->
+                    <div class="space-y-4 font-mono text-xs">
+                        <!-- Max Segment Duration Control -->
+                        <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-slate-300 font-semibold">Max Segment Duration:</span>
+                                <span id="max-duration-val-label" class="text-sky-400 font-bold">10s</span>
+                            </div>
+                            <input type="range" id="max-duration-slider" min="5" max="120" step="5" value="10" oninput="updateSliderLabel(this.value)" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                <span>5s</span>
+                                <span>30s</span>
+                                <span>60s</span>
+                                <span>120s</span>
+                            </div>
+                            
+                            <!-- Quick Presets -->
+                            <div class="grid grid-cols-4 gap-1.5 mt-3">
+                                <button onclick="setDurationPreset(10)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">10s</button>
+                                <button onclick="setDurationPreset(30)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">30s</button>
+                                <button onclick="setDurationPreset(60)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">60s</button>
+                                <button onclick="setDurationPreset(120)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">120s</button>
+                            </div>
+                        </div>
+
+                        <!-- NOAA Weather Channel Control -->
+                        <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <span class="text-slate-350 font-semibold block">Monitor NOAA Weather</span>
+                                    <span class="text-[10px] text-slate-550 block mt-0.5">Continuous 162.550 MHz broadcast</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="noaa-enabled-checkbox" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500 peer-checked:after:bg-white"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Emergency & Police Channel Control -->
+                        <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <span class="text-slate-350 font-semibold block">Monitor Emergency & Police</span>
+                                    <span class="text-[10px] text-slate-550 block mt-0.5">Local Emergency & WCPD channels</span>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="emergency-enabled-checkbox" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500 peer-checked:after:bg-white"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button onclick="saveSystemSettings()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
+                            Apply Settings
+                        </button>
+                        
+                        <div id="settings-status-msg" class="text-[10px] text-center font-mono py-1 min-h-[1.5rem] text-slate-550"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Service Logs Viewer -->
+    <div id="service-logs-container-div" class="w-full mb-8">
+        <div class="glass-card rounded-2xl p-6 w-full flex flex-col justify-between">
+            <div>
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-800 pb-4 mb-4">
+                    <div>
+                        <h3 class="text-sm font-bold tracking-wider uppercase text-slate-200">System Logs Viewer</h3>
+                        <p class="text-xs text-slate-500 font-mono mt-0.5">Real-time journal logs tailing remote buoy services</p>
+                    </div>
+                    <button id="logs-toggle-btn" onclick="toggleLogsTerminal()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 font-mono text-[10px] transition-colors border border-slate-700/50">Expand</button>
+                </div>
+                
+                <!-- Collapsible Logs Content Wrapper -->
+                <div id="logs-terminal-wrapper" class="hidden mt-4 space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                        <!-- Service Selector Tabs -->
+                        <div class="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+                            <button onclick="setActiveLogService('transcriber')" id="log-tab-transcriber" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20">Transcriber</button>
+                            <button onclick="setActiveLogService('sensor')" id="log-tab-sensor" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">Sensors</button>
+                            <button onclick="setActiveLogService('web')" id="log-tab-web" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">Web</button>
+                            <button onclick="setActiveLogService('ntrip')" id="log-tab-ntrip" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">NTRIP</button>
+                        </div>
+                        
+                        <!-- Filter and Actions -->
+                        <div class="flex items-center gap-3 text-xs font-mono w-full sm:w-auto">
+                            <input type="text" id="log-filter-input" placeholder="Filter log entries..." class="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-[10px] font-mono text-white focus:outline-none focus:border-sky-500/30 w-full sm:w-48" oninput="renderServiceLogs()">
+                            <button onclick="fetchServiceLogs()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 transition-colors border border-slate-700/50 text-[10px] whitespace-nowrap">Refresh</button>
+                        </div>
+                    </div>
+
+                    <div id="log-terminal-container" class="bg-slate-950 rounded-xl p-4 border border-slate-900 overflow-y-auto max-h-60 h-60 font-mono text-[10px] text-sky-400/90 leading-normal">
+                        <pre id="log-terminal-content" class="whitespace-pre-wrap">Initializing logs terminal...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -97,34 +656,74 @@
                     {
                         label: 'Voltage (V)',
                         borderColor: '#38bdf8',
-                        backgroundColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
                         data: [],
                         yAxisID: 'y',
                         tension: 0.3,
-                        pointRadius: 0
+                        pointRadius: 0,
+                        borderWidth: 2,
+                        fill: true
                     },
                     {
                         label: 'Current (mA)',
                         borderColor: '#f43f5e',
-                        backgroundColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
                         data: [],
                         yAxisID: 'y1',
                         tension: 0.3,
-                        pointRadius: 0
+                        pointRadius: 0,
+                        borderWidth: 2,
+                        fill: true
                     }
                 ]
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
-                    y: { type: 'linear', display: true, position: 'left', min: 11.5, max: 14.5, ticks: { color: '#38bdf8' }, grid: { color: '#334155' }},
-                    y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#f43f5e' }, grid: { drawOnChartArea: false }}
+                    x: { 
+                        ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }, 
+                        grid: { color: 'rgba(51, 65, 85, 0.3)' } 
+                    },
+                    y: { 
+                        type: 'linear', 
+                        display: true, 
+                        position: 'left', 
+                        min: 11.0, 
+                        max: 15.0, 
+                        ticks: { color: '#38bdf8', font: { family: 'JetBrains Mono', size: 10 } }, 
+                        grid: { color: 'rgba(51, 65, 85, 0.3)' }
+                    },
+                    y1: { 
+                        type: 'linear', 
+                        display: true, 
+                        position: 'right', 
+                        ticks: { color: '#f43f5e', font: { family: 'JetBrains Mono', size: 10 } }, 
+                        grid: { drawOnChartArea: false }
+                    }
                 },
-                plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                plugins: { 
+                    legend: { display: false }
+                }
             }
         });
+
+        function safeSetText(id, val) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.innerText = val;
+            }
+        }
+
+        // Global state
+        let allTranscripts = [];
+        let activeFilterChannel = 'all';
+        let channelSearchQuery = '';
+        let metricsWindowHours = 24;
+        let channelQueryTimeout = null;
+        let activeLogService = 'transcriber';
+        let rawLogLines = [];
 
         async function fetchData() {
             try {
@@ -135,66 +734,635 @@
                     const latest = data[data.length - 1];
                     const sensors = latest.sensors;
                     
+                    // Update JSON raw payload terminal console
+                    safeSetText('json-console', JSON.stringify(latest, null, 2));
+                    
                     // Update Top Stats
                     const ts = new Date(parseFloat(latest.timestamp) * 1000);
-                    document.getElementById('last-updated').innerText = `Last update: ${ts.toLocaleTimeString()}`;
+                    safeSetText('last-updated', `Last update: ${ts.toLocaleDateString()} ${ts.toLocaleTimeString()}`);
                     
+                    // Power Category Map
                     if (sensors.vedirect) {
-                        document.getElementById('batt-v').innerText = (parseInt(sensors.vedirect.V) / 1000).toFixed(2) + ' V';
-                        document.getElementById('batt-i').innerText = sensors.vedirect.I + ' mA';
-                        document.getElementById('solar-status').innerText = sensors.vedirect.PPV + ' W';
+                        safeSetText('batt-v', (parseInt(sensors.vedirect.V) / 1000).toFixed(2) + ' V');
+                        safeSetText('batt-i', sensors.vedirect.I + ' mA');
+                        safeSetText('solar-status', sensors.vedirect.PPV + ' W');
                         
-                        // Victron Specific Blocks
-                        document.getElementById('vic-vpv').innerText = (parseInt(sensors.vedirect.VPV) / 1000).toFixed(2) + ' V';
-                        document.getElementById('vic-ppv').innerText = sensors.vedirect.PPV + ' W';
+                        safeSetText('vic-vpv', (parseInt(sensors.vedirect.VPV) / 1000).toFixed(2));
+                        safeSetText('vic-ppv', sensors.vedirect.PPV);
                         
                         const csMap = {'0':'Off', '2':'Bulk', '3':'Absorption', '4':'Float', '5':'Storage'};
-                        document.getElementById('vic-cs').innerText = csMap[sensors.vedirect.CS] || 'Unknown';
-                        document.getElementById('vic-il').innerText = sensors.vedirect.IL + ' mA';
+                        safeSetText('vic-cs', csMap[sensors.vedirect.CS] || 'Unknown');
+                        safeSetText('vic-il', sensors.vedirect.IL);
                         
-                        // Yield translations (0.01 kWh -> * 10 = Watt-hours)
-                        document.getElementById('vic-h20').innerText = parseInt(sensors.vedirect.H20 || 0) * 10;
-                        document.getElementById('vic-h21').innerText = sensors.vedirect.H21 || 0;
-                        document.getElementById('vic-h22').innerText = parseInt(sensors.vedirect.H22 || 0) * 10;
+                        safeSetText('vic-h20', parseInt(sensors.vedirect.H20 || 0) * 10);
+                        safeSetText('vic-h21', sensors.vedirect.H21 || 0);
+                        safeSetText('vic-h22', parseInt(sensors.vedirect.H22 || 0) * 10);
+                        safeSetText('vic-h23', sensors.vedirect.H23 || '--');
                     }
+                    
+                    // Atmosphere Category Map
                     if (sensors.htu31d) {
-                        document.getElementById('env-t').innerText = sensors.htu31d.temperature.toFixed(1);
-                        document.getElementById('env-h').innerText = sensors.htu31d.relative_humidity.toFixed(1);
+                        const temp = sensors.htu31d.temperature;
+                        const rh = sensors.htu31d.relative_humidity;
+                        safeSetText('env-t', temp.toFixed(1));
+                        safeSetText('env-h', rh.toFixed(1));
+                        
+                        // Precise dew point calculation (Magnus-Tetens)
+                        const a = 17.27;
+                        const b = 237.7;
+                        const alpha = ((a * temp) / (b + temp)) + Math.log(rh / 100.0);
+                        const dp = (b * alpha) / (a - alpha);
+                        safeSetText('env-dp', dp.toFixed(1));
                     }
+                    
+                    // Navigation Category Map
                     if (sensors.gps) {
-                        document.getElementById('gps-lat').innerText = sensors.gps.latitude ? sensors.gps.latitude.toFixed(6) : 'No Fix';
-                        document.getElementById('gps-lon').innerText = sensors.gps.longitude ? sensors.gps.longitude.toFixed(6) : 'No Fix';
-                        document.getElementById('gps-sats').innerText = sensors.gps.satellites || 0;
+                        safeSetText('gps-lat', sensors.gps.latitude ? sensors.gps.latitude.toFixed(6) : 'No Fix');
+                        safeSetText('gps-lon', sensors.gps.longitude ? sensors.gps.longitude.toFixed(6) : 'No Fix');
+                        safeSetText('gps-sats', sensors.gps.satellites || 0);
+                        
+                        safeSetText('gps-alt', sensors.gps.altitude_m ? sensors.gps.altitude_m.toFixed(1) + ' m' : '--');
+                        safeSetText('gps-geoid', sensors.gps.height_geoid ? sensors.gps.height_geoid.toFixed(1) + ' m' : '--');
+                        safeSetText('gps-speed', sensors.gps.speed_kmh ? `${sensors.gps.speed_kmh.toFixed(2)} km/h (${(sensors.gps.speed_kmh / 1.852).toFixed(2)} kn)` : '0.00 km/h (0.00 kn)');
+                        safeSetText('gps-course', sensors.gps.track_angle_deg ? sensors.gps.track_angle_deg.toFixed(1) + '°' : '--');
+                        
+                        safeSetText('gps-hdop', sensors.gps.horizontal_dilution ? sensors.gps.horizontal_dilution.toFixed(2) : '--');
+                        safeSetText('gps-vdop', sensors.gps.vdop ? sensors.gps.vdop.toFixed(2) : '--');
+                        safeSetText('gps-pdop', sensors.gps.pdop ? sensors.gps.pdop.toFixed(2) : '--');
                         
                         let gps_status_text = 'Search';
                         if (sensors.gps.fix_quality === 4) gps_status_text = 'RTK Fix';
                         else if (sensors.gps.fix_quality === 5) gps_status_text = 'RTK Float';
                         else if (sensors.gps.fix_quality === 2) gps_status_text = 'DGPS';
-                        else if (sensors.gps.fix_quality === 1 || sensors.gps.satellites > 0) gps_status_text = 'Fix';
-                        document.getElementById('gps-status').innerText = gps_status_text;
+                        else if (sensors.gps.fix_quality === 1 || sensors.gps.satellites > 0) gps_status_text = '3D Fix';
+                        safeSetText('gps-status', gps_status_text);
+                    }
+                    
+                    // Attitude and Kinematics Category Map (BNO08x)
+                    if (sensors.bno08x) {
+                        const qx = sensors.bno08x.qx;
+                        const qy = sensors.bno08x.qy;
+                        const qz = sensors.bno08x.qz;
+                        const qw = sensors.bno08x.qw;
+                        
+                        // Quaternions to Euler Angles
+                        const sinr_cosp = 2 * (qw * qx + qy * qz);
+                        const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+                        const roll = Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI);
+                        
+                        const sinp = 2 * (qw * qy - qz * qx);
+                        let pitch;
+                        if (Math.abs(sinp) >= 1) {
+                            pitch = Math.sign(sinp) * (Math.PI / 2) * (180 / Math.PI);
+                        } else {
+                            pitch = Math.asin(sinp) * (180 / Math.PI);
+                        }
+                        
+                        const siny_cosp = 2 * (qw * qz + qx * qy);
+                        const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+                        let heading = Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI);
+                        if (heading < 0) heading += 360;
+                        
+                        // Update attitude numeric metrics
+                        safeSetText('imu-pitch', pitch.toFixed(1) + '°');
+                        safeSetText('imu-roll', roll.toFixed(1) + '°');
+                        safeSetText('imu-heading', heading.toFixed(0) + '°');
+                        
+                        safeSetText('visual-pitch', pitch.toFixed(1) + '°');
+                        safeSetText('visual-roll', roll.toFixed(1) + '°');
+                        
+                        // Rotate CSS buoy model graphic
+                        const visualBuoy = document.getElementById('buoy-graphic');
+                        if (visualBuoy) {
+                            visualBuoy.style.transform = `rotate(${roll.toFixed(1)}deg) translateY(${pitch.toFixed(1) * 2}px)`;
+                        }
+                        
+                        // Update raw diagnostic readings
+                        safeSetText('imu-ax', sensors.bno08x.ax.toFixed(3));
+                        safeSetText('imu-ay', sensors.bno08x.ay.toFixed(3));
+                        safeSetText('imu-az', sensors.bno08x.az.toFixed(3));
+                        
+                        safeSetText('imu-gx', sensors.bno08x.gx.toFixed(3));
+                        safeSetText('imu-gy', sensors.bno08x.gy.toFixed(3));
+                        safeSetText('imu-gz', sensors.bno08x.gz.toFixed(3));
+                        
+                        safeSetText('imu-mx', sensors.bno08x.mx.toFixed(1));
+                        safeSetText('imu-my', sensors.bno08x.my.toFixed(1));
+                        safeSetText('imu-mz', sensors.bno08x.mz.toFixed(1));
                     }
 
                     // Update Chart
-                    powerChart.data.labels = data.map(d => {
-                        const dTs = new Date(parseFloat(d.timestamp) * 1000);
-                        return dTs.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    });
-                    
-                    powerChart.data.datasets[0].data = data.map(d => {
-                        return d.sensors.vedirect ? (parseInt(d.sensors.vedirect.V) / 1000) : null;
-                    });
-                    powerChart.data.datasets[1].data = data.map(d => {
-                        return d.sensors.vedirect ? parseInt(d.sensors.vedirect.I) : null;
-                    });
-                    powerChart.update();
+                    if (powerChart && powerChart.data) {
+                        powerChart.data.labels = data.map(d => {
+                            const dTs = new Date(parseFloat(d.timestamp) * 1000);
+                            return dTs.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        });
+                        
+                        powerChart.data.datasets[0].data = data.map(d => {
+                            return d.sensors.vedirect ? (parseInt(d.sensors.vedirect.V) / 1000) : null;
+                        });
+                        powerChart.data.datasets[1].data = data.map(d => {
+                            return d.sensors.vedirect ? parseInt(d.sensors.vedirect.I) : null;
+                        });
+                        powerChart.update();
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching telemetry:", error);
             }
         }
 
-        fetchData();
+        async function fetchTranscripts() {
+            try {
+                let url = '/api/transcripts?limit=30';
+                if (activeFilterChannel && activeFilterChannel !== 'all') {
+                    url += `&channel=${encodeURIComponent(activeFilterChannel)}`;
+                }
+                if (channelSearchQuery.trim()) {
+                    url += `&query=${encodeURIComponent(channelSearchQuery.trim())}`;
+                }
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                allTranscripts = data;
+                renderTranscriptsLog();
+            } catch (error) {
+                console.error("Error fetching transcripts:", error);
+            }
+        }
+
+        async function fetchMetrics() {
+            try {
+                const response = await fetch(`/api/metrics?window_hours=${metricsWindowHours}`);
+                const data = await response.json();
+                
+                updateAnalyticsAndBadges(data);
+            } catch (error) {
+                console.error("Error fetching metrics:", error);
+            }
+        }
+
+        function updateAnalyticsAndBadges(metricsData) {
+            const channels = ['Marine-16', 'Marine-68', 'Marine-69', 'NOAA-WX1', 'Local-Emergency'];
+            const badgeIds = {
+                'Marine-16': 'filter-cnt-m16',
+                'Marine-68': 'filter-cnt-m68',
+                'Marine-69': 'filter-cnt-m69',
+                'NOAA-WX1': 'filter-cnt-noaa',
+                'Local-Emergency': 'filter-cnt-emer'
+            };
+            const barIds = {
+                'Marine-16': 'vol-bar-m16',
+                'Marine-68': 'vol-bar-m68',
+                'Marine-69': 'vol-bar-m69',
+                'NOAA-WX1': 'vol-bar-noaa',
+                'Local-Emergency': 'vol-bar-emer'
+            };
+            const txtIds = {
+                'Marine-16': 'vol-txt-m16',
+                'Marine-68': 'vol-txt-m68',
+                'Marine-69': 'vol-txt-m69',
+                'NOAA-WX1': 'vol-txt-noaa',
+                'Local-Emergency': 'vol-txt-emer'
+            };
+            
+            let totalCalls = 0;
+            let busiestChan = '--';
+            let maxCalls = -1;
+            let sumSnr = 0.0;
+            let countSnr = 0;
+            
+            const chanDisplayName = {
+                'Marine-16': 'CH 16 Calling',
+                'Marine-68': 'CH 68 Fishing A',
+                'Marine-69': 'CH 69 Fishing B',
+                'NOAA-WX1': 'NOAA Weather',
+                'Local-Emergency': 'Local Emergency'
+            };
+
+            // Reset all UI elements
+            channels.forEach(c => {
+                safeSetText(badgeIds[c], '0');
+                safeSetText(txtIds[c], '0 calls (0s)');
+                const bar = document.getElementById(barIds[c]);
+                if (bar) bar.style.width = '0%';
+            });
+            
+            // Loop through metrics
+            Object.keys(metricsData).forEach(c => {
+                const item = metricsData[c];
+                totalCalls += item.count;
+                
+                if (badgeIds[c]) {
+                    safeSetText(badgeIds[c], item.count);
+                }
+                
+                if (txtIds[c]) {
+                    safeSetText(txtIds[c], `${item.count} calls (${item.total_duration.toFixed(0)}s)`);
+                }
+                
+                if (item.count > maxCalls) {
+                    maxCalls = item.count;
+                    busiestChan = chanDisplayName[c] || c;
+                }
+                
+                if (item.avg_snr > 0) {
+                    sumSnr += item.avg_snr * item.count;
+                    countSnr += item.count;
+                }
+            });
+            
+            safeSetText('filter-cnt-all', totalCalls);
+            safeSetText('analytics-busiest', busiestChan);
+            
+            const avgSnr = countSnr > 0 ? (sumSnr / countSnr).toFixed(1) + ' dB' : '--';
+            safeSetText('analytics-snr', avgSnr);
+            
+            // Set percentages for volume bars
+            channels.forEach(c => {
+                const item = metricsData[c] || { count: 0 };
+                const pct = totalCalls > 0 ? (item.count / totalCalls) * 100 : 0;
+                const bar = document.getElementById(barIds[c]);
+                if (bar) bar.style.width = `${pct}%`;
+            });
+        }
+
+        function renderTranscriptsLog() {
+            const container = document.getElementById('transcripts-log-feed');
+            if (!container) return;
+            
+            if (allTranscripts.length === 0) {
+                container.innerHTML = `<p class="text-slate-500 italic text-sm p-4 bg-slate-950/20 border border-slate-900/30 rounded-xl text-center">No radio transcripts match the active filters.</p>`;
+                return;
+            }
+            
+            container.innerHTML = allTranscripts.map(t => {
+                const ts = new Date(t.timestamp);
+                const filename = t.audio_path ? t.audio_path.split(/[\\/]/).pop() : '';
+                
+                let audioHtml = '';
+                if (filename) {
+                    audioHtml = `
+                        <button onclick="playAudio('${filename}')" class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 font-mono text-[10px] flex items-center gap-1.5 transition-colors border border-slate-700/50">
+                            <span>PLAY</span>
+                        </button>
+                    `;
+                }
+                
+                return `
+                    <div class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-2 hover:border-slate-700/40 transition-colors">
+                        <div class="flex items-center justify-between flex-wrap gap-2 text-[10px] font-mono text-slate-500">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-500/10 font-bold">${t.channel_name}</span>
+                                <span>${(t.frequency_hz / 1000000).toFixed(3)} MHz</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span>SNR: <span class="text-emerald-400 font-bold">${t.snr_db} dB</span></span>
+                                <span>${ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
+                            </div>
+                        </div>
+                        <p class="text-slate-200 text-sm font-mono leading-relaxed bg-slate-950/30 p-2.5 rounded border border-slate-900/30">
+                            ${t.transcript_text || '<span class="text-slate-600 italic">No clear speech recognized</span>'}
+                        </p>
+                        <div class="flex justify-between items-center text-[10px] font-mono">
+                            <span class="text-slate-500">Duration: ${t.duration_seconds}s</span>
+                            ${audioHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setChannelFilter(channel) {
+            activeFilterChannel = channel;
+            
+            // Remove active classes from all buttons and add to clicked
+            const btns = [
+                { id: 'filter-btn-all', key: 'all', label: 'All Channels' },
+                { id: 'filter-btn-m16', key: 'Marine-16', label: 'CH 16 Calling' },
+                { id: 'filter-btn-m68', key: 'Marine-68', label: 'CH 68 Fishing A' },
+                { id: 'filter-btn-m69', key: 'Marine-69', label: 'CH 69 Fishing B' },
+                { id: 'filter-btn-noaa', key: 'NOAA-WX1', label: 'NOAA Weather' },
+                { id: 'filter-btn-emer', key: 'Local-Emergency', label: 'Local Emergency' }
+            ];
+            
+            let activeLabel = 'All Channels';
+            btns.forEach(b => {
+                const btnEl = document.getElementById(b.id);
+                if (btnEl) {
+                    if (b.key === channel) {
+                        btnEl.className = "w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-indigo-950/40 text-indigo-300 border-indigo-500/30 shadow-md";
+                        const badge = btnEl.querySelector('span:last-child');
+                        if (badge) badge.className = "rounded bg-indigo-900/40 px-2 py-0.5 font-bold";
+                        activeLabel = b.label;
+                    } else {
+                        btnEl.className = "w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40";
+                        const badge = btnEl.querySelector('span:last-child');
+                        if (badge) badge.className = "rounded bg-slate-950 px-2 py-0.5 font-bold";
+                    }
+                }
+            });
+            
+            safeSetText('active-drilldown-label', activeLabel);
+            
+            // Clear current query when switching channel filter
+            const input = document.getElementById('channel-query-input');
+            if (input) {
+                input.value = '';
+                channelSearchQuery = '';
+                const clearBtn = document.getElementById('clear-channel-query-btn');
+                if (clearBtn) clearBtn.classList.add('hidden');
+            }
+            
+            fetchTranscripts();
+        }
+
+        function setMetricsWindow(hours) {
+            metricsWindowHours = hours;
+            
+            // Update UI badge label
+            const badge = document.getElementById('analytics-window-badge');
+            if (badge) {
+                const labelMap = { 1: '1h Window', 6: '6h Window', 24: '24h Window', 168: '7d Window' };
+                badge.innerText = labelMap[hours] || `${hours}h Window`;
+            }
+            
+            // Update active state on window selector buttons
+            const btns = [1, 6, 24, 168];
+            btns.forEach(b => {
+                const btnEl = document.getElementById(`window-btn-${b}`);
+                if (btnEl) {
+                    if (b === hours) {
+                        btnEl.className = "py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-emerald-950/40 text-emerald-400 border border-emerald-500/20";
+                    } else {
+                        btnEl.className = "py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent";
+                    }
+                }
+            });
+            
+            fetchMetrics();
+        }
+
+        function debounceChannelQuery() {
+            if (channelQueryTimeout) {
+                clearTimeout(channelQueryTimeout);
+            }
+            const input = document.getElementById('channel-query-input');
+            const clearBtn = document.getElementById('clear-channel-query-btn');
+            if (input && clearBtn) {
+                if (input.value) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            }
+            
+            channelQueryTimeout = setTimeout(() => {
+                if (input) {
+                    channelSearchQuery = input.value;
+                    fetchTranscripts();
+                }
+            }, 300);
+        }
+
+        function clearChannelQuery() {
+            const input = document.getElementById('channel-query-input');
+            if (input) {
+                input.value = '';
+                channelSearchQuery = '';
+                debounceChannelQuery();
+            }
+        }
+
+        async function performSemanticSearch() {
+            const input = document.getElementById('semantic-search-input');
+            const query = input ? input.value.trim() : '';
+            if (!query) return;
+            
+            const container = document.getElementById('search-results-container');
+            if (container) {
+                container.innerHTML = '<p class="text-slate-500 italic">Searching vector store...</p>';
+            }
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, limit: 5 })
+                });
+                const data = await response.json();
+                
+                if (data.error) {
+                    if (container) container.innerHTML = `<p class="text-rose-400 text-[10px]">Error: ${data.error}</p>`;
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    if (container) container.innerHTML = '<p class="text-slate-500 italic">No semantic matches found.</p>';
+                    return;
+                }
+                
+                if (container) {
+                    container.innerHTML = data.map(r => {
+                        const pct = (r.similarity_score * 100).toFixed(1);
+                        return `
+                            <div class="bg-slate-900/40 border border-slate-800/40 rounded-lg p-2.5 space-y-1 hover:border-sky-500/20 transition-colors">
+                                <div class="flex justify-between items-center font-bold text-[9px] text-slate-500">
+                                    <span class="text-indigo-400">${r.channel_name}</span>
+                                    <span class="text-sky-400">Match: ${pct}%</span>
+                                </div>
+                                <p class="text-slate-300 font-mono text-[10px] leading-relaxed">${r.transcript_text}</p>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error("Error executing semantic search:", error);
+                if (container) container.innerHTML = '<p class="text-rose-400 text-[10px]">Query execution failed.</p>';
+            }
+        }
+
+        let activeAudio = null;
+        function playAudio(filename) {
+            if (activeAudio) {
+                activeAudio.pause();
+            }
+            activeAudio = new Audio(`/api/audio/${filename}`);
+            activeAudio.play().catch(e => console.error("Audio playback error:", e));
+        }
+
+        async function fetchServiceLogs() {
+            try {
+                const response = await fetch(`/api/logs/${activeLogService}?limit=100`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('log-terminal-content').innerText = `Error: ${data.error}`;
+                    return;
+                }
+                
+                rawLogLines = data.logs || [];
+                renderServiceLogs();
+            } catch (error) {
+                console.error("Error fetching service logs:", error);
+                document.getElementById('log-terminal-content').innerText = `Connection failed.`;
+            }
+        }
+
+        function renderServiceLogs() {
+            const el = document.getElementById('log-terminal-content');
+            if (!el) return;
+            
+            const filterInput = document.getElementById('log-filter-input');
+            const query = filterInput ? filterInput.value.toLowerCase().trim() : '';
+            
+            let filtered = rawLogLines;
+            if (query) {
+                filtered = rawLogLines.filter(line => line.toLowerCase().includes(query));
+            }
+            
+            if (filtered.length === 0) {
+                el.innerText = 'No matching log entries found.';
+                return;
+            }
+            
+            el.innerText = filtered.join('\n');
+            
+            // Auto-scroll to bottom
+            const container = document.getElementById('log-terminal-container');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function setActiveLogService(service) {
+            activeLogService = service;
+            
+            // Update tabs UI
+            const services = ['transcriber', 'sensor', 'web', 'ntrip'];
+            services.forEach(s => {
+                const tab = document.getElementById(`log-tab-${s}`);
+                if (tab) {
+                    if (s === service) {
+                        tab.className = "px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20";
+                    } else {
+                        tab.className = "px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent";
+                    }
+                }
+            });
+            
+            fetchServiceLogs();
+        }
+
+        function runMainLoops() {
+            fetchData();
+            fetchTranscripts();
+            fetchMetrics();
+            fetchServiceLogs();
+            fetchSystemSettings();
+        }
+
+        function toggleJsonTerminal() {
+            const wrapper = document.getElementById('json-terminal-wrapper');
+            const btn = document.getElementById('json-toggle-btn');
+            if (!wrapper || !btn) return;
+            
+            wrapper.classList.toggle('hidden');
+            const isHidden = wrapper.classList.contains('hidden');
+            btn.innerText = isHidden ? 'Expand' : 'Collapse';
+        }
+
+        function toggleLogsTerminal() {
+            const wrapper = document.getElementById('logs-terminal-wrapper');
+            const btn = document.getElementById('logs-toggle-btn');
+            if (!wrapper || !btn) return;
+            
+            wrapper.classList.toggle('hidden');
+            const isHidden = wrapper.classList.contains('hidden');
+            btn.innerText = isHidden ? 'Expand' : 'Collapse';
+        }
+
+        async function fetchSystemSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                if (data.max_segment_duration_seconds !== undefined) {
+                    const val = data.max_segment_duration_seconds;
+                    document.getElementById('max-duration-slider').value = val;
+                    document.getElementById('max-duration-val-label').innerText = val + 's';
+                }
+                if (data.noaa_enabled !== undefined) {
+                    document.getElementById('noaa-enabled-checkbox').checked = data.noaa_enabled;
+                }
+                if (data.emergency_enabled !== undefined) {
+                    document.getElementById('emergency-enabled-checkbox').checked = data.emergency_enabled;
+                }
+            } catch (error) {
+                console.error("Error fetching system settings:", error);
+            }
+        }
+
+        async function saveSystemSettings() {
+            const val = document.getElementById('max-duration-slider').value;
+            const noaaChecked = document.getElementById('noaa-enabled-checkbox').checked;
+            const emergencyChecked = document.getElementById('emergency-enabled-checkbox').checked;
+            const msgEl = document.getElementById('settings-status-msg');
+            if (msgEl) {
+                msgEl.innerText = "Applying changes...";
+                msgEl.className = "text-[10px] text-center font-mono py-1 text-sky-400 animate-pulse";
+            }
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        max_segment_duration_seconds: parseFloat(val),
+                        noaa_enabled: noaaChecked,
+                        emergency_enabled: emergencyChecked
+                    })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    if (msgEl) {
+                        msgEl.innerText = "Settings applied successfully.";
+                        msgEl.className = "text-[10px] text-center font-mono py-1 text-emerald-400";
+                        setTimeout(() => {
+                            msgEl.innerText = "";
+                        }, 3000);
+                    }
+                    // Fetch transcripts and metrics immediately to reflect changes
+                    fetchTranscripts();
+                    fetchMetrics();
+                } else {
+                    if (msgEl) {
+                        msgEl.innerText = "Error: " + (data.error || "Failed to save settings");
+                        msgEl.className = "text-[10px] text-center font-mono py-1 text-rose-450";
+                    }
+                }
+            } catch (error) {
+                console.error("Error saving settings:", error);
+                if (msgEl) {
+                    msgEl.innerText = "Failed to connect to server.";
+                    msgEl.className = "text-[10px] text-center font-mono py-1 text-rose-450";
+                }
+            }
+        }
+
+        function updateSliderLabel(val) {
+            document.getElementById('max-duration-val-label').innerText = val + 's';
+        }
+
+        function setDurationPreset(val) {
+            document.getElementById('max-duration-slider').value = val;
+            updateSliderLabel(val);
+        }
+
+        runMainLoops();
         setInterval(fetchData, 15000);
+        setInterval(fetchTranscripts, 10000);
+        setInterval(fetchMetrics, 10000);
+        setInterval(fetchServiceLogs, 5000);
     </script>
 </body>
 </html>

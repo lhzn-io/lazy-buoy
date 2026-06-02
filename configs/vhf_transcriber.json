@@ -1,0 +1,65 @@
+{
+  "scan_frequencies": [
+    {
+      "frequency_hz": 156800000,
+      "name": "Marine-16",
+      "priority": 1
+    },
+    {
+      "frequency_hz": 156450000,
+      "name": "Marine-9",
+      "priority": 2
+    },
+    {
+      "frequency_hz": 156425000,
+      "name": "Marine-68",
+      "priority": 2
+    },
+    {
+      "frequency_hz": 156475000,
+      "name": "Marine-69",
+      "priority": 2
+    },
+    {
+      "frequency_hz": 162550000,
+      "name": "NOAA-WX1",
+      "priority": 3
+    },
+    {
+      "frequency_hz": 154280000,
+      "name": "Local-Emergency",
+      "priority": 3
+    },
+    {
+      "frequency_hz": 155310000,
+      "name": "WCPD-Ch1",
+      "priority": 3
+    },
+    {
+      "frequency_hz": 155550000,
+      "name": "WCPD-Ch3",
+      "priority": 3
+    }
+  ],
+  "sdr_settings": {
+    "device_type": "rtl-airband",
+    "sample_rate_hz": 1024000,
+    "output_sample_rate_hz": 16000,
+    "squelch_level": 150,
+    "audio_threshold": 300.0,
+    "gain_db": 40.0
+  },
+  "transcriber": {
+    "engine": "hailo",
+    "fallback_engine": "vosk",
+    "hailo_hef_path": "/home/pi/Projects/lhzn-io/lazy-buoy/configs/whisper_tiny_hailo8.hef",
+    "vosk_model_path": "/home/pi/Projects/lhzn-io/lazy-buoy/vosk-models/vosk-model-small-en-us-0.15",
+    "embedding_model": "all-MiniLM-L6-v2"
+  },
+  "database": {
+    "sqlite_path": "/home/pi/Projects/lhzn-io/lazy-buoy/logs/transcripts.sqlite",
+    "lancedb_dir": "/home/pi/Projects/lhzn-io/lazy-buoy/logs/lancedb",
+    "audio_storage_dir": "/home/pi/Projects/lhzn-io/lazy-buoy/logs/audio",
+    "retention_days": 14
+  }
+}

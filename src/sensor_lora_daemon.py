@@ -49,7 +49,7 @@ def find_gps_device(baudrate=9600, timeout=10, logger=None):
                 logger.debug(f"Trying GPS on {dev}")
             uart = serial.Serial(dev, baudrate=baudrate, timeout=timeout)
             test_gps = adafruit_gps.GPS(uart, debug=False)
-            test_gps.send_command(b"PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
+            test_gps.send_command(b"PMTK314,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
             test_gps.send_command(b"PMTK220,1000")
             test_gps.update()
             if test_gps.latitude is not None or test_gps.has_fix:
@@ -69,7 +69,10 @@ def find_gps_device(baudrate=9600, timeout=10, logger=None):
 
 def get_gps_data(gps):
     if gps is None:
-        return dict(fix_quality=0, latitude=None, longitude=None, altitude_m=None, speed_kmh=None, satellites=None)
+        return dict(
+            fix_quality=0, latitude=None, longitude=None, altitude_m=None, speed_kmh=None, satellites=None,
+            track_angle_deg=None, horizontal_dilution=None, height_geoid=None, pdop=None, vdop=None
+        )
     
     # We will accumulate the highest fix quality seen in the buffer flush
     best_qual = getattr(gps, 'fix_quality', 0)
@@ -91,8 +94,16 @@ def get_gps_data(gps):
             altitude_m=gps.altitude_m,
             speed_kmh=gps.speed_kmh,
             satellites=gps.satellites,
+            track_angle_deg=getattr(gps, 'track_angle_deg', None),
+            horizontal_dilution=getattr(gps, 'horizontal_dilution', None) or getattr(gps, 'hdop', None),
+            height_geoid=getattr(gps, 'height_geoid', None),
+            pdop=getattr(gps, 'pdop', None),
+            vdop=getattr(gps, 'vdop', None),
         )
-    return dict(fix_quality=0, latitude=None, longitude=None, altitude_m=None, speed_kmh=None, satellites=None)
+    return dict(
+        fix_quality=0, latitude=None, longitude=None, altitude_m=None, speed_kmh=None, satellites=None,
+        track_angle_deg=None, horizontal_dilution=None, height_geoid=None, pdop=None, vdop=None
+    )
 
 def get_bno08x_data():
     # Get all available sensor data from BNO08X
@@ -413,7 +424,7 @@ def main():
     else:
         uart = serial.Serial(gps_device, baudrate=9600, timeout=10)
         gps = adafruit_gps.GPS(uart, debug=False)
-        gps.send_command(b"PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
+        gps.send_command(b"PMTK314,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0")
         gps.send_command(b"PMTK220,1000")
 
     # RFM9x LoRa initialization

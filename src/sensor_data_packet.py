@@ -56,7 +56,10 @@ class SensorDataPacket:
         'bme280': ['temperature', 'humidity', 'pressure'],
         'htu31d': ['temperature', 'relative_humidity'],
         'bno08x': ['qx', 'qy', 'qz', 'qw', 'ax', 'ay', 'az', 'gx', 'gy', 'gz', 'mx', 'my', 'mz'],
-        'gps': ['fix_quality', 'latitude', 'longitude', 'altitude_m', 'speed_kmh', 'satellites'],
+        'gps': [
+            'fix_quality', 'latitude', 'longitude', 'altitude_m', 'speed_kmh', 'satellites',
+            'track_angle_deg', 'horizontal_dilution', 'height_geoid', 'pdop', 'vdop'
+        ],
         'vedirect': [
             'V', 'I', 'VPV', 'PPV', 'IL', 'CS', 'MPPT', 'ERR', 'H19', 'H20', 'H21', 'H22', 'H23', 'HSDS'
         ],

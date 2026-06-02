@@ -1,0 +1,16 @@
+[Unit]
+Description=LHZN Buoy Marine VHF Transcription and Semantic Search Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/Projects/lhzn-io/lazy-buoy/src
+ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/vhf_transcriber_daemon.py --config /home/pi/Projects/lhzn-io/lazy-buoy/configs/vhf_transcriber.json
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
