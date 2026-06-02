@@ -1,0 +1,21 @@
+[Unit]
+Description=LHZN Buoy Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Projects/lhzn-io/lazy-buoy/src
+
+# Use the full path to the conda environment's python
+ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/web_app.py
+
+# Restart automatically if it crashes
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

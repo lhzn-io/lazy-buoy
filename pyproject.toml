@@ -1,0 +1,22 @@
+﻿[project]
+name = "lazy-buoy"
+version = "0.1.0"
+description = "Embedded telemetry and radio monitoring system for LHZN Buoy"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "adafruit-circuitpython-bno08x",
+    "adafruit-circuitpython-htu31d",
+    "adafruit-circuitpython-gps",
+    "adafruit-circuitpython-rfm9x",
+    "pyserial",
+    "pyModeS",
+    "pyrtlsdr",
+    "structlog",
+    "lgpio",
+    "sounddevice",
+    "vosk",
+    "flask",
+    "ve-direct-python @ git+https://github.com/jessedc/ve.direct-python.git"
+]
+

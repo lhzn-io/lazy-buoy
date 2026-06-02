@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LHZN Buoy Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .card { background-color: #1e293b; border: 1px solid #334155; }
+    </style>
+</head>
+<body class="p-6 font-sans">
+    <header class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-blue-400">LHZN Buoy</h1>
+            <p class="text-sm text-slate-400" id="last-updated">Waiting for data...</p>
+        </div>
+        <div class="flex space-x-4 text-sm">
+            <span class="rounded bg-blue-900/50 px-3 py-1 font-mono text-blue-300 border border-blue-500/30">RTK/GPS: <span id="gps-status" class="font-bold">--</span></span>
+            <span class="rounded bg-green-900/50 px-3 py-1 font-mono text-green-300 border border-green-500/30">Sol: <span id="solar-status" class="font-bold">-- W</span></span>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Battery Voltage</h3>
+            <div class="text-3xl font-bold" id="batt-v">-- V</div>
+        </div>
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Net Current</h3>
+            <div class="text-3xl font-bold" id="batt-i">-- mA</div>
+        </div>
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Environment</h3>
+            <div class="text-xl font-bold"><span id="env-t">--</span> °C</div>
+            <div class="text-xl font-bold text-slate-300"><span id="env-h">--</span> % RH</div>
+        </div>
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-2">Coordinates</h3>
+            <div class="text-sm font-mono text-slate-300">Lat: <span id="gps-lat">--</span></div>
+            <div class="text-sm font-mono text-slate-300">Lon: <span id="gps-lon">--</span></div>
+            <div class="text-xs text-slate-500 mt-1">Sats: <span id="gps-sats">--</span></div>
+        </div>
+    </div>
+
+    <!-- NEW VICTRON METRICS SECTION -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Solar Panel</h3>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-slate-400 text-sm">Panel Voltage</span>
+                <span class="font-mono text-slate-200" id="vic-vpv">-- V</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-400 text-sm">Live Power</span>
+                <span class="font-mono text-slate-200" id="vic-ppv">-- W</span>
+            </div>
+        </div>
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Charge Controller</h3>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-slate-400 text-sm">State</span>
+                <span class="font-mono text-blue-300" id="vic-cs">--</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-400 text-sm">System Load Draw</span>
+                <span class="font-mono text-slate-200" id="vic-il">-- mA</span>
+            </div>
+        </div>
+        <div class="card rounded-lg p-5">
+            <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">Energy Yield</h3>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-slate-400 text-sm">Today</span>
+                <span class="font-mono text-slate-200"><span id="vic-h20" class="font-bold">--</span> Wh (<span id="vic-h21">--</span>W peak)</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-slate-400 text-sm">Yesterday</span>
+                <span class="font-mono text-slate-200"><span id="vic-h22" class="font-bold">--</span> Wh</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card rounded-lg p-6 mb-8 w-full max-h-96">
+        <h3 class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Power Trend</h3>
+        <canvas id="powerChart" height="80"></canvas>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('powerChart').getContext('2d');
+        const powerChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Voltage (V)',
+                        borderColor: '#38bdf8',
+                        backgroundColor: '#38bdf8',
+                        data: [],
+                        yAxisID: 'y',
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'Current (mA)',
+                        borderColor: '#f43f5e',
+                        backgroundColor: '#f43f5e',
+                        data: [],
+                        yAxisID: 'y1',
+                        tension: 0.3,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } },
+                    y: { type: 'linear', display: true, position: 'left', min: 11.5, max: 14.5, ticks: { color: '#38bdf8' }, grid: { color: '#334155' }},
+                    y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#f43f5e' }, grid: { drawOnChartArea: false }}
+                },
+                plugins: { legend: { labels: { color: '#cbd5e1' } } }
+            }
+        });
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                
+                if (data.length > 0) {
+                    const latest = data[data.length - 1];
+                    const sensors = latest.sensors;
+                    
+                    // Update Top Stats
+                    const ts = new Date(parseFloat(latest.timestamp) * 1000);
+                    document.getElementById('last-updated').innerText = `Last update: ${ts.toLocaleTimeString()}`;
+                    
+                    if (sensors.vedirect) {
+                        document.getElementById('batt-v').innerText = (parseInt(sensors.vedirect.V) / 1000).toFixed(2) + ' V';
+                        document.getElementById('batt-i').innerText = sensors.vedirect.I + ' mA';
+                        document.getElementById('solar-status').innerText = sensors.vedirect.PPV + ' W';
+                        
+                        // Victron Specific Blocks
+                        document.getElementById('vic-vpv').innerText = (parseInt(sensors.vedirect.VPV) / 1000).toFixed(2) + ' V';
+                        document.getElementById('vic-ppv').innerText = sensors.vedirect.PPV + ' W';
+                        
+                        const csMap = {'0':'Off', '2':'Bulk', '3':'Absorption', '4':'Float', '5':'Storage'};
+                        document.getElementById('vic-cs').innerText = csMap[sensors.vedirect.CS] || 'Unknown';
+                        document.getElementById('vic-il').innerText = sensors.vedirect.IL + ' mA';
+                        
+                        // Yield translations (0.01 kWh -> * 10 = Watt-hours)
+                        document.getElementById('vic-h20').innerText = parseInt(sensors.vedirect.H20 || 0) * 10;
+                        document.getElementById('vic-h21').innerText = sensors.vedirect.H21 || 0;
+                        document.getElementById('vic-h22').innerText = parseInt(sensors.vedirect.H22 || 0) * 10;
+                    }
+                    if (sensors.htu31d) {
+                        document.getElementById('env-t').innerText = sensors.htu31d.temperature.toFixed(1);
+                        document.getElementById('env-h').innerText = sensors.htu31d.relative_humidity.toFixed(1);
+                    }
+                    if (sensors.gps) {
+                        document.getElementById('gps-lat').innerText = sensors.gps.latitude ? sensors.gps.latitude.toFixed(6) : 'No Fix';
+                        document.getElementById('gps-lon').innerText = sensors.gps.longitude ? sensors.gps.longitude.toFixed(6) : 'No Fix';
+                        document.getElementById('gps-sats').innerText = sensors.gps.satellites || 0;
+                        
+                        let gps_status_text = 'Search';
+                        if (sensors.gps.fix_quality === 4) gps_status_text = 'RTK Fix';
+                        else if (sensors.gps.fix_quality === 5) gps_status_text = 'RTK Float';
+                        else if (sensors.gps.fix_quality === 2) gps_status_text = 'DGPS';
+                        else if (sensors.gps.fix_quality === 1 || sensors.gps.satellites > 0) gps_status_text = 'Fix';
+                        document.getElementById('gps-status').innerText = gps_status_text;
+                    }
+
+                    // Update Chart
+                    powerChart.data.labels = data.map(d => {
+                        const dTs = new Date(parseFloat(d.timestamp) * 1000);
+                        return dTs.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    });
+                    
+                    powerChart.data.datasets[0].data = data.map(d => {
+                        return d.sensors.vedirect ? (parseInt(d.sensors.vedirect.V) / 1000) : null;
+                    });
+                    powerChart.data.datasets[1].data = data.map(d => {
+                        return d.sensors.vedirect ? parseInt(d.sensors.vedirect.I) : null;
+                    });
+                    powerChart.update();
+                }
+            } catch (error) {
+                console.error("Error fetching telemetry:", error);
+            }
+        }
+
+        fetchData();
+        setInterval(fetchData, 15000);
+    </script>
+</body>
+</html>

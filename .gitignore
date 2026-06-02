@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.class
+
+# Environment configs (contains secrets)
+*.env
+ntrip.env
+.env
+.venv
+env/
+venv/
+ENV/
+
+# External cloned libraries and subfolders
+dump1090/
+pyModeS/
+adafruit_circuitpython_*/
+rtl-sdr-blog/
+ve.direct-python/
+realtime-adsb-out/
+lg-master/
+vosk-models/
+
+# Download archives
+master.zip
+*.zip
+*.tar.gz
+*.tgz
+
+# OS / Named Pipes / Lock files
+.lgd-nfy0
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+logs/
+*.sqlite
+*.log

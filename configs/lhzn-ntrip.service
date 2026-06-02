@@ -1,0 +1,25 @@
+[Unit]
+Description=LHZN Buoy NTRIP (RTK GPS) Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pi/Projects/lhzn-io/lazy-buoy/src
+
+# Load the configuration variables
+EnvironmentFile=/home/pi/Projects/lhzn-io/lazy-buoy/ntrip.env
+
+# Use the conda environment python and pass the environment variables
+ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/ntrip_client.py --caster ${NTRIP_CASTER} --port ${NTRIP_PORT} --mountpoint ${NTRIP_MOUNTPOINT} --user ${NTRIP_USER} --password ${NTRIP_PASSWORD}
+
+# Automatically restart if the script crashes or network drops
+Restart=always
+RestartSec=15
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

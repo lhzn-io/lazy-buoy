@@ -1,0 +1,23 @@
+[Unit]
+Description=LHZN Buoy Sensor Daemon
+After=network.target
+
+[Service]
+Type=simple
+# Running as root ensures uninterrupted access to I2C, SPI, Serial, and the ability to execute the emergency shutdown
+User=root
+WorkingDirectory=/home/pi/Projects/lhzn-io/lazy-buoy/src
+
+# Use the full path to the conda environment's python
+ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/sensor_lora_daemon.py -i 15 -v 11.5 --debug
+
+# Restart automatically if it crashes
+Restart=always
+RestartSec=10
+
+# Log stdout and stderr to the system journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
