@@ -1,4 +1,4 @@
-﻿# AGENTS.md: LHZN Buoy Operations Guide
+﻿# lazy-buoy Operations Guide
 
 Welcome! If you are an autonomous agent operating within this repository, please adhere to the following guidelines and constraints.
 

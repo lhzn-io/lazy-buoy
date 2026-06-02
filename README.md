@@ -1,4 +1,4 @@
-﻿# lhznbuoy
+﻿# lazy-buoy
 
 A multi-sensor data collection and LoRa transmission system for environmental and aircraft (ADS-B) monitoring, designed for edge deployment on a solar-powered Raspberry Pi 5.
 
@@ -12,7 +12,6 @@ A multi-sensor data collection and LoRa transmission system for environmental an
 * **`configs/`**: Systemd unit configurations (`lhzn-sensor.service`, `lhzn-ntrip.service`, `lhzn-web.service`).
 * **`scripts/`**: System logs and offline test scripts (`scripts/tests/`).
 * **`docs/`**: Technical notebooks and architecture documentation.
-* **`legacy/`**: Historic diagnostic/patching scripts preserved for troubleshooting.
 
 ---
 
