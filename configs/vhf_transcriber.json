@@ -39,6 +39,21 @@
       "frequency_hz": 155550000,
       "name": "WCPD-Ch3",
       "priority": 3
+    },
+    {
+      "frequency_hz": 156675000,
+      "name": "Marine-72",
+      "priority": 2
+    },
+    {
+      "frequency_hz": 157300000,
+      "name": "Marine-26TX",
+      "priority": 2
+    },
+    {
+      "frequency_hz": 157400000,
+      "name": "Marine-28TX",
+      "priority": 2
     }
   ],
   "sdr_settings": {
