@@ -47,7 +47,7 @@ def parse_response(response_str):
     register_id = reg_lo | (reg_hi << 8)
     return reply_type, register_id, flags, data
 
-def get_register_value(ser, register_id, max_attempts=15):
+def get_register_value(ser, register_id, max_attempts=100):
     reg_lo = register_id & 0xFF
     reg_hi = (register_id >> 8) & 0xFF
     
@@ -82,10 +82,12 @@ def get_register_value(ser, register_id, max_attempts=15):
     return None
 
 def main():
-    port = "/dev/ttyUSB0"
-    if len(sys.argv) > 1:
-        port = sys.argv[1]
-        
+    import argparse
+    parser = argparse.ArgumentParser(description="Query Victron MPPT registers.")
+    parser.add_argument("port", nargs="?", default="/dev/ttyUSB0", help="Serial port to use (default: /dev/ttyUSB0)")
+    args = parser.parse_args()
+    
+    port = args.port
     print(f"Opening port {port}...")
     ser = serial.Serial(port, 19200, timeout=1)
     
@@ -104,7 +106,8 @@ def main():
         0xED9D: "Load switch high level (reconnect)",
         0xED9C: "Load switch low level (disconnect)",
         0xEDAD: "Load current",
-        0xEDA9: "Load output voltage"
+        0xEDA9: "Load output voltage",
+        0xED8D: "Battery voltage"
     }
     
     for reg, name in registers.items():
@@ -121,12 +124,17 @@ def main():
                 val = data.hex()
             
             # Format voltage registers which have scale 0.01V
-            if register_id in (0xED9D, 0xED9C, 0xEDA9):
-                print(f"  Register {register_id:04X} ({name}): value={val / 100.0:.2f} V, flags={flags:02X}")
+            if isinstance(val, (int, float)):
+                if register_id in (0xED9D, 0xED9C, 0xEDA9, 0xED8D):
+                    print(f"  Register {register_id:04X} ({name}): value={val / 100.0:.2f} V, flags={flags:02X}")
+                else:
+                    print(f"  Register {register_id:04X} ({name}): value={val}, flags={flags:02X}")
             else:
-                print(f"  Register {register_id:04X} ({name}): value={val}, flags={flags:02X}")
+                print(f"  Register {register_id:04X} ({name}): value=Raw({val}), flags={flags:02X}")
         else:
             print(f"  Register {reg:04X} ({name}): Failed to receive response")
+            
+        time.sleep(0.5)
             
     ser.close()
 

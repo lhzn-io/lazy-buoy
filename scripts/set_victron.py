@@ -67,13 +67,13 @@ def parse_response(response_str):
     register_id = reg_lo | (reg_hi << 8)
     return reply_type, register_id, flags, data
 
-def get_register_value(ser, register_id, max_attempts=15):
+def get_register_value(ser, register_id, max_attempts=100):
     reg_lo = register_id & 0xFF
     reg_hi = (register_id >> 8) & 0xFF
-    
+
     ser.reset_input_buffer()
     send_get_command(ser, register_id)
-    
+
     for attempt in range(max_attempts):
         line = ser.readline()
         if not line:
@@ -82,22 +82,22 @@ def get_register_value(ser, register_id, max_attempts=15):
             line_str = line.decode('ascii', errors='ignore').strip()
         except Exception:
             continue
-            
+
         if not line_str.startswith(':'):
             continue
-            
+
         parsed = parse_response(line_str)
         if parsed:
             reply_type, reg, flags, data = parsed
             if reg == register_id and reply_type == 7:
                 return reply_type, reg, flags, data
-            
+
     return None
 
-def set_register_value(ser, register_id, value, val_len, max_attempts=15):
+def set_register_value(ser, register_id, value, val_len, max_attempts=100):
     ser.reset_input_buffer()
     send_set_command(ser, register_id, value, val_len)
-    
+
     for attempt in range(max_attempts):
         line = ser.readline()
         if not line:
@@ -106,53 +106,67 @@ def set_register_value(ser, register_id, value, val_len, max_attempts=15):
             line_str = line.decode('ascii', errors='ignore').strip()
         except Exception:
             continue
-            
+
         if not line_str.startswith(':'):
             continue
-            
+
         parsed = parse_response(line_str)
         if parsed:
             reply_type, reg, flags, data = parsed
             if reg == register_id and reply_type == 8:
                 return reply_type, reg, flags, data
-                
+
     return None
 
 def main():
-    port = "/dev/ttyUSB0"
-    if len(sys.argv) > 1:
-        port = sys.argv[1]
-        
+    import argparse
+    parser = argparse.ArgumentParser(description="Set Victron MPPT load control registers.")
+    parser.add_argument("-p", "--port", default="/dev/ttyUSB0", help="Serial port to use (default: /dev/ttyUSB0)")
+    parser.add_argument("-d", "--disconnect", type=float, default=11.20, help="Disconnect voltage in Volts (default: 11.20)")
+    parser.add_argument("-r", "--reconnect", type=float, default=13.40, help="Reconnect voltage in Volts (default: 13.40)")
+    parser.add_argument("-m", "--mode", type=int, default=5, help="Load output control mode (default: 5)")
+    args = parser.parse_args()
+
+    port = args.port
+    disconnect_val = int(round(args.disconnect * 100))
+    reconnect_val = int(round(args.reconnect * 100))
+
     print(f"Opening port {port}...")
     ser = serial.Serial(port, 19200, timeout=1)
-    
-    # 1. Set Load Output Control (0xEDAB) = 5 (User Defined settings 1)
-    print("\n--- Setting Load Output Control to User Defined (5) ---")
-    parsed = set_register_value(ser, 0xEDAB, 5, 1)
+
+    # 1. Set Load Output Control (0xEDAB) = args.mode
+    print(f"\n--- Setting Load Output Control to Mode {args.mode} ---")
+    parsed = set_register_value(ser, 0xEDAB, args.mode, 1)
     if parsed:
         reply_type, register_id, flags, data = parsed
         print(f"Success! Mode set. Reply flags: {flags:02X}, reply data: {data.hex()}")
     else:
         print("Failed to set load control mode.")
-        
-    # 2. Set Disconnect Voltage (0xED9C) = 1120 (11.20 V)
-    print("\n--- Setting Disconnect Voltage to 11.20 V ---")
-    parsed = set_register_value(ser, 0xED9C, 1120, 2)
+    
+    time.sleep(0.5)
+
+    # 2. Set Disconnect Voltage (0xED9C) = disconnect_val
+    print(f"\n--- Setting Disconnect Voltage to {args.disconnect:.2f} V ---")
+    parsed = set_register_value(ser, 0xED9C, disconnect_val, 2)
     if parsed:
         reply_type, register_id, flags, data = parsed
         print(f"Success! Disconnect set. Reply flags: {flags:02X}, reply data: {data.hex()}")
     else:
         print("Failed to set disconnect voltage.")
         
-    # 3. Set Reconnect Voltage (0xED9D) = 1260 (12.60 V)
-    print("\n--- Setting Reconnect Voltage to 12.60 V ---")
-    parsed = set_register_value(ser, 0xED9D, 1260, 2)
+    time.sleep(0.5)
+
+    # 3. Set Reconnect Voltage (0xED9D) = reconnect_val
+    print(f"\n--- Setting Reconnect Voltage to {args.reconnect:.2f} V ---")
+    parsed = set_register_value(ser, 0xED9D, reconnect_val, 2)
     if parsed:
         reply_type, register_id, flags, data = parsed
         print(f"Success! Reconnect set. Reply flags: {flags:02X}, reply data: {data.hex()}")
     else:
         print("Failed to set reconnect voltage.")
         
+    time.sleep(0.5)
+
     # 4. Verify everything by reading it back
     print("\n--- Verifying settings ---")
     registers = {
@@ -161,7 +175,7 @@ def main():
         0xED9D: "Load switch high level (reconnect)",
         0xED9C: "Load switch low level (disconnect)"
     }
-    
+
     for reg, name in registers.items():
         parsed = get_register_value(ser, reg)
         if parsed:
@@ -174,7 +188,7 @@ def main():
                 val = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
             else:
                 val = data.hex()
-            
+
             if register_id in (0xED9D, 0xED9C):
                 print(f"  Register {register_id:04X} ({name}): {val / 100.0:.2f} V")
             else:
@@ -182,6 +196,8 @@ def main():
         else:
             print(f"  Register {reg:04X} ({name}): Failed to read back")
             
+        time.sleep(0.2)
+
     ser.close()
 
 if __name__ == "__main__":
