@@ -1,0 +1,39 @@
+diff --git a/app/hailo_whisper_pipeline.py b/app/hailo_whisper_pipeline.py
+index 586837c..476a3e3 100644
+--- a/app/hailo_whisper_pipeline.py
++++ b/app/hailo_whisper_pipeline.py
+@@ -195,6 +195,8 @@ class HailoWhisperPipeline:
+             # Create inference models for both encoder and decoder
+             encoder_infer_model = vdevice.create_infer_model(self.encoder_model_path)
+             decoder_infer_model = vdevice.create_infer_model(self.decoder_model_path)
++            encoder_infer_model.set_batch_size(1)
++            decoder_infer_model.set_batch_size(1)
+             
+             # Configure input and output data formats (all as FLOAT32)
+             encoder_infer_model.input().set_format_type(FormatType.FLOAT32)
+@@ -226,7 +228,8 @@ class HailoWhisperPipeline:
+                             transcriptions = []  # Store transcriptions for this input
+                             
+                             # Ensure the input data is in contiguous memory layout for efficient processing
+-                            input_mel = np.ascontiguousarray(input_mel)
++                            enc_in_shape = encoder_infer_model.input().shape
++                            input_mel = np.ascontiguousarray(input_mel.reshape(enc_in_shape))
+                             
+                             # Set the input buffer for the encoder with the mel-spectrogram data
+                             encoder_bindings.input().set_buffer(input_mel)
+@@ -261,9 +264,13 @@ class HailoWhisperPipeline:
+                                 tokenized_ids = self._tokenization(decoder_input_ids)
+ 
+                                 # Set encoder features as first input to decoder
+-                                decoder_bindings.input(f"{decoder_model_name}/input_layer1").set_buffer(encoded_features)
++                                dec_in1_shape = decoder_infer_model.input(f"{decoder_model_name}/input_layer1").shape
++                                dec_in2_shape = decoder_infer_model.input(f"{decoder_model_name}/input_layer2").shape
++                                features_reshaped = np.ascontiguousarray(encoded_features.reshape(dec_in1_shape))
++                                decoder_bindings.input(f"{decoder_model_name}/input_layer1").set_buffer(features_reshaped)
+                                 # Set processed tokenized IDs as second input to decoder
+-                                decoder_bindings.input(f"{decoder_model_name}/input_layer2").set_buffer(tokenized_ids)
++                                tokenized_reshaped = np.ascontiguousarray(tokenized_ids.reshape(dec_in2_shape))
++                                decoder_bindings.input(f"{decoder_model_name}/input_layer2").set_buffer(tokenized_reshaped)
+ 
+                                 # Prepare output buffers for all decoder outputs
+                                 buffers = [

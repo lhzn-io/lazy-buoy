@@ -4,8 +4,10 @@ import json
 import logging
 
 # Dynamic Imports to allow cross-platform compiling and host environment parity
+import sys
+
 try:
-    from hailo_platform import VDevice, InferVDevice
+    from hailo_platform import VDevice
     HAILO_AVAILABLE = True
 except ImportError:
     HAILO_AVAILABLE = False
@@ -16,6 +18,16 @@ try:
 except ImportError:
     VOSK_AVAILABLE = False
 
+try:
+    sys.path.append("/home/pi/Projects/lhzn-io/lazy-buoy/STT_hailo_whisper")
+    sys.path.append("/home/pi/Projects/lhzn-io/lazy-buoy/STT_hailo_whisper/app")
+    from app.hailo_whisper_pipeline import HailoWhisperPipeline
+    from common.preprocessing import preprocess
+    import common.audio_utils
+    HAILO_WHISPER_AVAILABLE = True
+except ImportError:
+    HAILO_WHISPER_AVAILABLE = False
+
 
 class SpeechTranscriber:
     """Base class for Speech-to-Text transcriber engines."""
@@ -24,6 +36,10 @@ class SpeechTranscriber:
 
     def initialize(self):
         """Perform heavy initialization (loading models, pre-allocating device buffers)."""
+        pass
+
+    def close(self):
+        """Release allocated resources and stop background threads."""
         pass
 
     def transcribe_segment(self, audio_file_path):
@@ -111,26 +127,31 @@ class HailoWhisperTranscriber(SpeechTranscriber):
         self.hef_path = hef_path
         self.sample_rate = sample_rate
         self.target_device = None
+        self.pipeline = None
         self.logger = logging.getLogger("HailoWhisperTranscriber")
+        
+        # Standard paths for NPU encoder/decoder HEF models on RPi5
+        self.encoder_hef = "/home/pi/Projects/lhzn-io/lazy-buoy/STT_hailo_whisper/app/hefs/h8l/tiny/tiny-whisper-encoder-10s_15dB_h8l.hef"
+        self.decoder_hef = "/home/pi/Projects/lhzn-io/lazy-buoy/STT_hailo_whisper/app/hefs/h8l/tiny/tiny-whisper-decoder-fixed-sequence-matmul-split_h8l.hef"
 
     def initialize(self):
         """Allocate PCIe device nodes and load the pre-compiled HEF network graph."""
-        if not HAILO_AVAILABLE:
-            raise RuntimeError("HailoRT platform library is not installed.")
+        if not HAILO_AVAILABLE or not HAILO_WHISPER_AVAILABLE:
+            self.logger.warning("hailo_platform or STT_hailo_whisper not available. Running in MOCK mode.")
+            self.target_device = "MOCK_DEVICE"
+            return
             
-        if not os.path.exists(self.hef_path):
-            raise FileNotFoundError(f"Whisper Hailo Executable Format (HEF) file not found at: {self.hef_path}")
-            
-        self.logger.info(f"Connecting to Hailo device and loading HEF: {self.hef_path}")
-        
+        self.logger.info("Initializing HailoWhisperPipeline...")
         try:
-            # Connect to active PCIe co-processor
-            self.target_device = VDevice()
-            # In live execution, this reads parameters, configures VStreams,
-            # and buffers context weights for the Whisper Encoder HEF.
-            self.logger.info("Hailo-8 co-processor interface initialized successfully.")
+            self.pipeline = HailoWhisperPipeline(
+                encoder_model_path=self.encoder_hef,
+                decoder_model_path=self.decoder_hef,
+                variant="tiny"
+            )
+            self.target_device = "HAILO_DEVICE"
+            self.logger.info("HailoWhisperPipeline initialized successfully.")
         except Exception as e:
-            self.logger.error(f"Failed to initialize Hailo PCIe device connection: {e}")
+            self.logger.error(f"Failed to initialize HailoWhisperPipeline: {e}")
             raise
 
     def transcribe_segment(self, audio_file_path):
@@ -139,24 +160,59 @@ class HailoWhisperTranscriber(SpeechTranscriber):
             raise RuntimeError("Hailo-8 hardware has not been initialized.")
             
         if not os.path.exists(audio_file_path):
+            self.logger.error(f"Audio file not found: {audio_file_path}")
+            return "", 0.0
+            
+        if self.target_device == "MOCK_DEVICE" or self.pipeline is None:
+            # Never write placeholder text into the transcript store.
+            self.logger.warning(f"MOCK mode: skipping transcription of {os.path.basename(audio_file_path)}")
             return "", 0.0
             
         try:
-            # 1. Pre-process audio (compute Mel-spectrogram coefficients)
-            # 2. Feed Mel features to the Hailo VStream input buffers
-            # 3. Trigger hardware forward pass: inputs are mapped to encoder context embeddings
-            # 4. Read computed output embeddings from output VStreams
-            # 5. Execute local autoregressive text generation (beam search) on the RPi 5 CPU
-            # (Below represents the accelerated transcription pipeline output stub)
             self.logger.info(f"Hardware-accelerating audio encoding for: {os.path.basename(audio_file_path)}")
             
-            # Simple placeholder for R&D. In execution, the actual HEF inference yields text.
-            mock_text = "Vessel Coast Guard this is local fishing vessel requesting weather update"
-            return mock_text, 0.92
+            # Load audio using the utility function
+            audio = common.audio_utils.load_audio(audio_file_path)
+            
+            # Preprocess audio (is_nhwc=True matches compiled tiny model config)
+            mel_spectrograms = preprocess(
+                audio,
+                is_nhwc=True,
+                chunk_length=10.0,
+                chunk_offset=0,
+                max_duration=60
+            )
+            
+            full_transcription = []
+            for i, mel in enumerate(mel_spectrograms):
+                self.logger.info(f"Processing chunk {i+1}/{len(mel_spectrograms)}...")
+                self.pipeline.send_data(mel)
+                transcription = self.pipeline.get_transcription()
+                if transcription.strip():
+                    full_transcription.append(transcription.strip())
+            
+            final_text = " ".join(full_transcription).strip()
+            self.logger.info(f"Final transcription: {final_text}")
+            
+            confidence = 0.95 if final_text else 0.0
+            return final_text, confidence
             
         except Exception as e:
             self.logger.error(f"Hailo-8 Whisper acceleration error: {e}")
             return "", 0.0
+
+    def close(self):
+        """Clean up and stop inference threads."""
+        if self.pipeline:
+            self.logger.info("Stopping pipeline thread...")
+            self.pipeline.stop()
+            self.pipeline = None
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class TensorRtWhisperTranscriber(SpeechTranscriber):
