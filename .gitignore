@@ -37,3 +37,13 @@ Thumbs.db
 logs/
 *.sqlite
 *.log
+
+# Vendored upstream checkout (Seeed-Projects/STT_hailo_whisper); local changes kept in patches/
+STT_hailo_whisper/
+
+# Generated at runtime by sdr_receiver.py
+configs/rtl_airband.conf
+
+# Config snapshots and throwaway probes
+*.bak
+scratch/
