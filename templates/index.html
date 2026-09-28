@@ -32,11 +32,9 @@
             box-shadow: 0 12px 40px 0 rgba(56, 189, 248, 0.12);
             transform: translateY(-2px);
         }
-        /* Custom indicator styles */
         .status-dot {
             box-shadow: 0 0 8px currentColor;
         }
-        /* Wave animation on background of buoy visualizer */
         @keyframes wave-flow {
             0% { transform: translateX(0) translateZ(0) scaleY(1); }
             50% { transform: translateX(-25%) translateZ(0) scaleY(0.9); }
@@ -58,561 +56,719 @@
             </div>
             <p class="text-sm text-slate-400 mt-1 font-mono" id="last-updated">System syncing...</p>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
-            <span class="rounded-full bg-blue-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-blue-300 border border-blue-500/20 flex items-center gap-2">
-                <span class="h-2 w-2 rounded-full bg-blue-400 status-dot text-blue-400"></span>
-                GPS: <span id="gps-status" class="font-bold">--</span> (<span id="gps-sats" class="font-bold">--</span> Sats)
-            </span>
-            <span class="rounded-full bg-emerald-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-center gap-2">
-                <span class="h-2 w-2 rounded-full bg-emerald-400 status-dot text-emerald-400 animate-pulse"></span>
-                Solar: <span id="solar-status" class="font-bold">-- W</span>
-            </span>
-            <span class="rounded-full bg-slate-900/60 px-4 py-1.5 font-mono text-xs font-semibold text-slate-300 border border-slate-700/30 flex items-center gap-2">
-                Telemetry Rate: <span class="font-bold">15s</span>
-            </span>
+        
+        <!-- Tabbed Navigation -->
+        <div class="flex flex-wrap items-center gap-4">
+            <nav class="hidden md:flex gap-2">
+                <button id="nav-btn-telemetry" onclick="switchView('telemetry')" class="px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20">Telemetry Dashboard</button>
+                <button id="nav-btn-vhf" onclick="switchView('vhf')" class="px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">SDR & Transcripts</button>
+            </nav>
+            
+            <!-- Mobile Hamburger Menu Button -->
+            <div class="relative md:hidden">
+                <button id="hamburger-btn" onclick="toggleHamburger()" class="p-2 text-slate-400 hover:text-slate-200 focus:outline-none bg-slate-900/60 rounded-xl border border-slate-800">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+                <!-- Dropdown Menu -->
+                <div id="mobile-menu" class="hidden absolute right-0 mt-2 w-48 bg-slate-950 border border-slate-800/80 rounded-xl shadow-2xl z-50 p-2 space-y-1 font-mono text-xs">
+                    <button onclick="switchView('telemetry')" class="w-full text-left px-3 py-2 rounded-lg text-sky-400 hover:bg-slate-900 transition-colors">Telemetry Dashboard</button>
+                    <button onclick="switchView('vhf')" class="w-full text-left px-3 py-2 rounded-lg text-slate-450 hover:bg-slate-900 transition-colors">SDR & Transcripts</button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-blue-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-blue-300 border border-blue-500/20 flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full bg-blue-400 status-dot text-blue-400"></span>
+                    GPS: <span id="gps-status" class="font-bold">--</span> (<span id="gps-sats" class="font-bold">--</span> Sats)
+                </span>
+                <span class="rounded-full bg-emerald-950/60 px-4 py-1.5 font-mono text-xs font-semibold text-emerald-300 border border-emerald-500/20 flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full bg-emerald-400 status-dot text-emerald-400 animate-pulse"></span>
+                    Solar: <span id="solar-status" class="font-bold">-- W</span>
+                </span>
+            </div>
         </div>
     </header>
 
-    <!-- Unified Dashboard Grid (Grouped by Genre / Function) -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        
-        <!-- GENRE 1: ATTITUDE & WAVE KINEMATICS (BNO08X I2C IMU) -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold tracking-wide uppercase text-blue-400 flex items-center gap-2">
-                        Wave & Attitude Dynamics
-                    </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-500/10 font-mono">BNO08X IMU</span>
-                </div>
-
-                <!-- 3D Buoy Attitude Visualizer Card -->
-                <div class="relative w-full h-36 flex items-center justify-center overflow-hidden bg-slate-950/60 rounded-xl border border-slate-800/80 mb-6">
-                    <!-- Dynamic Water Background -->
-                    <div class="absolute bottom-0 w-[200%] h-12 bg-blue-600/15 border-t border-blue-500/30 water-wave"></div>
-                    <!-- Live Orientation Horizon Line -->
-                    <div class="absolute w-full h-[1px] bg-slate-800"></div>
-                    
-                    <!-- CSS Buoy Graphic -->
-                    <div id="buoy-graphic" class="relative w-14 h-24 transition-transform duration-200 ease-out" style="transform-style: preserve-3d; transform: rotate(0deg) translateY(0px);">
-                        <!-- Light beacon -->
-                        <div class="absolute left-[22px] top-0 w-3 h-3 rounded-full bg-amber-400 animate-pulse border border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.8)]"></div>
-                        <!-- Mast/Structure -->
-                        <div class="absolute left-[26px] top-[10px] w-[4px] h-[34px] bg-slate-400"></div>
-                        <!-- Center cross structure -->
-                        <div class="absolute left-[16px] top-[25px] w-[24px] h-[4px] bg-slate-500 rounded"></div>
-                        <!-- Buoy Main Body Float Ring -->
-                        <div class="absolute left-0 top-[42px] w-14 h-10 rounded-2xl bg-gradient-to-b from-red-500 to-red-600 border border-red-400/30 shadow-[0_4px_12px_rgba(239,68,68,0.4)]"></div>
-                        <!-- Center reflective stripes -->
-                        <div class="absolute left-0 top-[52px] w-14 h-3 bg-white/95"></div>
-                        <div class="absolute left-[6px] top-[53px] w-10 h-1 bg-amber-500 rounded-sm"></div>
-                    </div>
-
-                    <!-- Attitude metrics overlay -->
-                    <div class="absolute bottom-2 right-3 font-mono text-[10px] text-slate-500 flex gap-2">
-                        <span>PITCH: <span id="visual-pitch" class="text-slate-400 font-bold">0.0°</span></span>
-                        <span>ROLL: <span id="visual-roll" class="text-slate-400 font-bold">0.0°</span></span>
-                    </div>
-                </div>
-
-                <!-- Primary Attitude Euler Angles Grid -->
-                <div class="grid grid-cols-3 gap-3 mb-6 text-center">
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-blue-500/20 cursor-help" title="Heading/Yaw (Rotation around Z-axis: 0 to 360 degrees, where 0 is North)">
-                        <span class="text-slate-400 text-xs font-semibold block uppercase">Heading</span>
-                        <span class="text-xl font-bold font-mono text-white" id="imu-heading">--°</span>
-                    </div>
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-emerald-500/20 cursor-help" title="Pitch (Rotation around Y-axis: forward/backward tilt in degrees; positive indicates bow down, negative indicates bow up)">
-                        <span class="text-slate-400 text-xs font-semibold block uppercase">Pitch</span>
-                        <span class="text-xl font-bold font-mono text-emerald-400" id="imu-pitch">--°</span>
-                    </div>
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-cyan-500/20 cursor-help" title="Roll (Rotation around X-axis: left/right tilt in degrees; positive indicates port down, negative indicates port up)">
-                        <span class="text-slate-400 text-xs font-semibold block uppercase">Roll</span>
-                        <span class="text-xl font-bold font-mono text-cyan-400" id="imu-roll">--°</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Detailed Raw 9DOF Diagnostic Telemetry -->
-            <div class="border-t border-slate-800/50 pt-4 mt-auto">
-                <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">IMU Raw Tri-Axis Diagnostics</h3>
-                <div class="space-y-2 text-xs font-mono">
-                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Linear acceleration along local X, Y, and Z axes (meters per second squared, includes gravity vector)">
-                        <span class="text-slate-500 font-semibold uppercase">Accelerometer</span>
-                        <span class="text-slate-300">
-                            X: <span id="imu-ax" class="text-slate-200 font-bold">--</span> | 
-                            Y: <span id="imu-ay" class="text-slate-200 font-bold">--</span> | 
-                            Z: <span id="imu-az" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">m/s²</span>
-                        </span>
-                    </div>
-                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Angular velocity around local X, Y, and Z axes (radians per second)">
-                        <span class="text-slate-500 font-semibold uppercase">Gyroscope</span>
-                        <span class="text-slate-300">
-                            X: <span id="imu-gx" class="text-slate-200 font-bold">--</span> | 
-                            Y: <span id="imu-gy" class="text-slate-200 font-bold">--</span> | 
-                            Z: <span id="imu-gz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">rad/s</span>
-                        </span>
-                    </div>
-                    <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Magnetic field strength along local X, Y, and Z axes (microteslas)">
-                        <span class="text-slate-500 font-semibold uppercase">Magnetometer</span>
-                        <span class="text-slate-300">
-                            X: <span id="imu-mx" class="text-slate-200 font-bold">--</span> | 
-                            Y: <span id="imu-my" class="text-slate-200 font-bold">--</span> | 
-                            Z: <span id="imu-mz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">µT</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- GENRE 2: NAVIGATION & POSITIONING (RTK-GPS & ENVIRONMENT) -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
-                        Positioning & Environment
-                    </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-900/30 text-indigo-300 border border-indigo-500/10 font-mono">RTK-GPS / I2C</span>
-                </div>
-
-                <!-- Navigation Primary Card -->
-                <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-5 mb-5 space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="cursor-help" title="Latitude (Decimal Degrees, positive represents North, negative represents South)">
-                            <span class="text-slate-550 text-xs font-semibold block uppercase">Latitude</span>
-                            <span class="text-lg font-bold font-mono text-white" id="gps-lat">--</span>
-                        </div>
-                        <div class="cursor-help" title="Longitude (Decimal Degrees, positive represents East, negative represents West)">
-                            <span class="text-slate-550 text-xs font-semibold block uppercase">Longitude</span>
-                            <span class="text-lg font-bold font-mono text-white" id="gps-lon">--</span>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
-                        <div class="cursor-help" title="Altitude above mean sea level (meters)">
-                            <span class="text-slate-555 text-xs font-semibold block uppercase">Altitude</span>
-                            <span class="text-base font-bold font-mono text-slate-200" id="gps-alt">-- m</span>
-                        </div>
-                        <div class="cursor-help" title="Geoid separation (height of geoid above the WGS84 reference ellipsoid in meters)">
-                            <span class="text-slate-555 text-xs font-semibold block uppercase">Geoid Separation</span>
-                            <span class="text-base font-bold font-mono text-slate-200" id="gps-geoid">-- m</span>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
-                        <div class="cursor-help" title="Speed Over Ground (displayed in kilometers per hour and nautical knots)">
-                            <span class="text-slate-555 text-xs font-semibold block uppercase">Speed Over Ground</span>
-                            <span class="text-base font-bold font-mono text-slate-200" id="gps-speed">-- km/h</span>
-                        </div>
-                        <div class="cursor-help" title="Course Over Ground (true track angle in degrees, clockwise relative to True North)">
-                            <span class="text-slate-555 text-xs font-semibold block uppercase">Course Over Ground</span>
-                            <span class="text-base font-bold font-mono text-slate-200" id="gps-course">--°</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dilution of Precision Navigation Diagnostics -->
-                <div class="grid grid-cols-3 gap-2 text-center mb-5 bg-slate-950/20 border border-slate-800/30 rounded-xl p-3">
-                    <div class="cursor-help" title="Horizontal Dilution of Precision (horizontal geometric accuracy multiplier; lower is better, <1.0 is excellent)">
-                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">HDOP</span>
-                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-hdop">--</span>
-                    </div>
-                    <div class="cursor-help" title="Vertical Dilution of Precision (vertical geometric accuracy multiplier; lower is better, <1.0 is excellent)">
-                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">VDOP</span>
-                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-vdop">--</span>
-                    </div>
-                    <div class="cursor-help" title="Position Dilution of Precision (three-dimensional geometric accuracy multiplier; lower is better, <1.5 is excellent)">
-                        <span class="text-[10px] text-slate-550 font-semibold block uppercase">PDOP</span>
-                        <span class="text-sm font-bold font-mono text-slate-300" id="gps-pdop">--</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- GENRE 2B: ENVIRONMENTAL METRICS (HTU31D) -->
-            <div class="border-t border-slate-800/50 pt-4 mt-auto">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Atmospheric Environment</h3>
-                    <span class="text-[10px] text-slate-550 font-mono">HTU31D Sensor</span>
-                </div>
-                <div class="grid grid-cols-3 gap-3">
-                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Ambient air temperature inside the weatherproof enclosure (degrees Celsius)">
-                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Temperature</span>
-                        <span class="text-base font-bold font-mono text-white"><span id="env-t">--</span>°C</span>
-                    </div>
-                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Relative humidity (percentage of water vapor saturation in the air)">
-                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Humidity</span>
-                        <span class="text-base font-bold font-mono text-slate-200"><span id="env-h">--</span>%</span>
-                    </div>
-                    <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Dew Point (calculated temperature at which air moisture condenses in degrees Celsius; lower indicates drier air)">
-                        <span class="text-[10px] text-slate-550 font-bold block uppercase">Dew Point</span>
-                        <span class="text-base font-bold font-mono text-slate-300"><span id="env-dp">--</span>°C</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- GENRE 3: POWER SYSTEMS (VICTRON MPPT VE.DIRECT) -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
-                        Solar & Battery Power
-                    </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono">Victron MPPT</span>
-                </div>
-
-                <!-- Live Power Metrics Grid -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="12V battery terminal voltage (volts)">
-                        <span class="text-slate-550 text-xs font-semibold block uppercase">Battery Voltage</span>
-                        <span class="text-2xl font-bold font-mono text-white" id="batt-v">-- V</span>
-                    </div>
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="Net current flowing into or out of the battery (milliamps; positive indicates net charging, negative indicates discharge under system load)">
-                        <span class="text-slate-550 text-xs font-semibold block uppercase">Net Current</span>
-                        <span class="text-2xl font-bold font-mono text-white" id="batt-i">-- mA</span>
-                    </div>
-                </div>
-
-                <!-- Secondary Power Diagnostics -->
-                <div class="bg-slate-950/20 border border-slate-800/30 rounded-xl p-4 space-y-2.5 text-sm">
-                    <div class="flex justify-between items-center cursor-help" title="Solar panel (PV array) input voltage (volts) and active generated power (watts)">
-                        <span class="text-slate-400 text-xs uppercase font-semibold">Solar Panel PV</span>
-                        <span class="font-mono text-slate-200"><span id="vic-vpv">--</span> V / <span id="vic-ppv" class="font-bold text-emerald-400">--</span> W</span>
-                    </div>
-                    <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="Active charger algorithm state (e.g. Bulk, Absorption, Float, Storage, or Off)">
-                        <span class="text-slate-400 text-xs uppercase font-semibold">Charge State</span>
-                        <span class="font-mono text-blue-300 font-bold" id="vic-cs">--</span>
-                    </div>
-                    <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="MPPT load terminal load draw current (milliamps)">
-                        <span class="text-slate-400 text-xs uppercase font-semibold">Load Output Draw</span>
-                        <span class="font-mono text-slate-200"><span id="vic-il">--</span> mA</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Energy Yield Statistics -->
-            <div class="border-t border-slate-800/50 pt-4 mt-auto">
-                <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Energy Harvest & Yields</h3>
-                <div class="grid grid-cols-2 gap-3 text-xs">
-                    <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Daily cumulative energy yield (watt-hours) and peak power output (watts) recorded today">
-                        <span class="text-slate-550 font-semibold block">TODAY</span>
-                        <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h20">--</span> Wh</span>
-                        <span class="text-[10px] text-slate-550 block">Peak: <span id="vic-h21">--</span>W</span>
-                    </div>
-                    <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Total energy yield harvested yesterday (watt-hours) and previous day sequence identifier (days)">
-                        <span class="text-slate-550 font-semibold block">YESTERDAY</span>
-                        <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h22">--</span> Wh</span>
-                        <span class="text-[10px] text-slate-550 block">Sequence ID: <span id="vic-h23">--</span></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Power Trend Time Series Graph Card (Power Systems Category) -->
-    <div class="glass-card rounded-2xl p-6 w-full mb-8">
-        <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-6">
-            <div>
-                <h3 class="text-lg font-bold tracking-wide uppercase text-slate-200">Power System Historical Trends</h3>
-                <p class="text-xs text-slate-500 font-mono mt-0.5">Dual-Axis Battery Charge and Current Draw (Rolling 30 Minutes)</p>
-            </div>
-            <div class="flex items-center gap-4 text-xs font-mono">
-                <span class="flex items-center gap-1.5 text-sky-400">
-                    <span class="h-2 w-2 rounded-full bg-sky-400 status-dot text-sky-400"></span> Voltage (V)
-                </span>
-                <span class="flex items-center gap-1.5 text-rose-400">
-                    <span class="h-2 w-2 rounded-full bg-rose-400 status-dot text-rose-400"></span> Current (mA)
-                </span>
-            </div>
-        </div>
-        <div class="h-64 sm:h-72 w-full relative">
-            <canvas id="powerChart" class="w-full h-full"></canvas>
-        </div>
-    </div>
-
-    <!-- VHF Transcription, Semantic Search, and Chatter Analytics Terminal -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        
-        <!-- Column 1: Search & Channel Drill-Down -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
-            <div class="space-y-6">
+    <!-- TAB VIEW 1: TELEMETRY DASHBOARD -->
+    <div id="view-telemetry" class="space-y-6">
+        <!-- Unified Dashboard Grid (Grouped by Genre / Function) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- GENRE 1: ATTITUDE & WAVE KINEMATICS (BNO08X I2C IMU) -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center justify-between mb-5">
-                        <h2 class="text-lg font-bold tracking-wide uppercase text-sky-400 flex items-center gap-2">
-                            Semantic Radio Search
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold tracking-wide uppercase text-blue-400 flex items-center gap-2">
+                            Wave & Attitude Dynamics
                         </h2>
-                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-sky-900/30 text-sky-300 border border-sky-500/10 font-mono">Global Store</span>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-500/10 font-mono">BNO08X IMU</span>
                     </div>
-                    
-                    <!-- Search Input Group -->
-                    <div class="space-y-2.5">
-                        <input type="text" id="semantic-search-input" placeholder="e.g. distress signal or coast guard..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-sky-500/55 transition-colors">
-                        <button onclick="performSemanticSearch()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
-                            Query Vector Store
+
+                    <!-- 3D Buoy Attitude Visualizer Card -->
+                    <div class="relative w-full h-36 flex items-center justify-center overflow-hidden bg-slate-950/60 rounded-xl border border-slate-800/80 mb-6">
+                        <div class="absolute bottom-0 w-[200%] h-12 bg-blue-600/15 border-t border-blue-500/30 water-wave"></div>
+                        <div class="absolute w-full h-[1px] bg-slate-800"></div>
+                        
+                        <!-- CSS Buoy Graphic -->
+                        <div id="buoy-graphic" class="relative w-14 h-24 transition-transform duration-200 ease-out" style="transform-style: preserve-3d; transform: rotate(0deg) translateY(0px);">
+                            <div class="absolute left-[22px] top-0 w-3 h-3 rounded-full bg-amber-400 animate-pulse border border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.8)]"></div>
+                            <div class="absolute left-[26px] top-[10px] w-[4px] h-[34px] bg-slate-400"></div>
+                            <div class="absolute left-[16px] top-[25px] w-[24px] h-[4px] bg-slate-500 rounded"></div>
+                            <div class="absolute left-0 top-[42px] w-14 h-10 rounded-2xl bg-gradient-to-b from-red-500 to-red-600 border border-red-400/30 shadow-[0_4px_12px_rgba(239,68,68,0.4)]"></div>
+                            <div class="absolute left-0 top-[52px] w-14 h-3 bg-white/95"></div>
+                            <div class="absolute left-[6px] top-[53px] w-10 h-1 bg-amber-500 rounded-sm"></div>
+                        </div>
+
+                        <!-- Attitude metrics overlay -->
+                        <div class="absolute bottom-2 right-3 font-mono text-[10px] text-slate-500 flex gap-2">
+                            <span>PITCH: <span id="visual-pitch" class="text-slate-400 font-bold">0.0°</span></span>
+                            <span>ROLL: <span id="visual-roll" class="text-slate-400 font-bold">0.0°</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Primary Attitude Euler Angles Grid -->
+                    <div class="grid grid-cols-3 gap-3 mb-6 text-center">
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-blue-500/20 cursor-help" title="Heading/Yaw (Rotation around Z-axis: 0 to 360 degrees, where 0 is North)">
+                            <span class="text-slate-400 text-xs font-semibold block uppercase">Heading</span>
+                            <span class="text-xl font-bold font-mono text-white" id="imu-heading">--°</span>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-emerald-500/20 cursor-help" title="Pitch (Rotation around Y-axis: tilt in degrees)">
+                            <span class="text-slate-400 text-xs font-semibold block uppercase">Pitch</span>
+                            <span class="text-xl font-bold font-mono text-emerald-400" id="imu-pitch">--°</span>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner hover:border-cyan-500/20 cursor-help" title="Roll (Rotation around X-axis: roll in degrees)">
+                            <span class="text-slate-400 text-xs font-semibold block uppercase">Roll</span>
+                            <span class="text-xl font-bold font-mono text-cyan-400" id="imu-roll">--°</span>
+                        </div>
+                    </div>
+
+                    <!-- IMU Calibration Controls -->
+                    <div class="flex gap-2 mb-6">
+                        <button onclick="calibrateIMU()" class="flex-1 py-2 rounded-xl text-xs font-mono font-bold transition-all bg-indigo-950/40 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-900/40 hover:text-white" title="Set current orientation as level flat">
+                            Calibrate Flat
                         </button>
-                    </div>
-                    <div id="search-results-container" class="mt-3.5 space-y-2 text-xs max-h-36 overflow-y-auto font-mono border-t border-slate-800/40 pt-3">
-                        <p class="text-slate-500 italic">No active search matches displayed.</p>
+                        <button onclick="clearIMUCalibration()" class="py-2 px-3 rounded-xl text-xs font-mono font-bold transition-all bg-slate-900/40 text-slate-400 border border-slate-800/40 hover:bg-slate-850 hover:text-white" title="Reset offsets to 0.0">
+                            Reset
+                        </button>
                     </div>
                 </div>
 
-                <!-- Channel Drill-Down Filters -->
-                <div class="border-t border-slate-800/50 pt-4">
+                <!-- Detailed Raw 9DOF Diagnostic Telemetry -->
+                <div class="border-t border-slate-800/50 pt-4 mt-auto">
+                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">IMU Raw Tri-Axis Diagnostics</h3>
+                    <div class="space-y-2 text-xs font-mono">
+                        <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Linear acceleration (m/s²)">
+                            <span class="text-slate-555 font-semibold uppercase">Accelerometer</span>
+                            <span class="text-slate-300">
+                                X: <span id="imu-ax" class="text-slate-200 font-bold">--</span> | 
+                                Y: <span id="imu-ay" class="text-slate-200 font-bold">--</span> | 
+                                Z: <span id="imu-az" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">m/s²</span>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Angular velocity (rad/s)">
+                            <span class="text-slate-555 font-semibold uppercase">Gyroscope</span>
+                            <span class="text-slate-300">
+                                X: <span id="imu-gx" class="text-slate-200 font-bold">--</span> | 
+                                Y: <span id="imu-gy" class="text-slate-200 font-bold">--</span> | 
+                                Z: <span id="imu-gz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">rad/s</span>
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-900/30 px-3 py-1.5 rounded border border-slate-800/20 cursor-help" title="Magnetic field strength (µT)">
+                            <span class="text-slate-555 font-semibold uppercase">Magnetometer</span>
+                            <span class="text-slate-300">
+                                X: <span id="imu-mx" class="text-slate-200 font-bold">--</span> | 
+                                Y: <span id="imu-my" class="text-slate-200 font-bold">--</span> | 
+                                Z: <span id="imu-mz" class="text-slate-200 font-bold">--</span> <span class="text-slate-500 text-[10px]">µT</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GENRE 2: NAVIGATION & POSITIONING (RTK-GPS & ENVIRONMENT) -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
+                            Positioning & Environment
+                        </h2>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-900/30 text-indigo-300 border border-indigo-500/10 font-mono">RTK-GPS / I2C</span>
+                    </div>
+
+                    <!-- Navigation Primary Card -->
+                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-5 mb-5 space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="cursor-help" title="Latitude in decimal degrees">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Latitude</span>
+                                <span class="text-lg font-bold font-mono text-white" id="gps-lat">--</span>
+                            </div>
+                            <div class="cursor-help" title="Longitude in decimal degrees">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Longitude</span>
+                                <span class="text-lg font-bold font-mono text-white" id="gps-lon">--</span>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
+                            <div class="cursor-help" title="Altitude above mean sea level">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Altitude</span>
+                                <span class="text-base font-bold font-mono text-slate-200" id="gps-alt">-- m</span>
+                            </div>
+                            <div class="cursor-help" title="Height of geoid above reference ellipsoid">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Geoid Separation</span>
+                                <span class="text-base font-bold font-mono text-slate-200" id="gps-geoid">-- m</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 border-t border-slate-800/60 pt-3">
+                            <div class="cursor-help" title="Speed Over Ground">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Speed Over Ground</span>
+                                <span class="text-base font-bold font-mono text-slate-200" id="gps-speed">-- km/h</span>
+                            </div>
+                            <div class="cursor-help" title="Course track angle relative to True North">
+                                <span class="text-slate-555 text-xs font-semibold block uppercase">Course Over Ground</span>
+                                <span class="text-base font-bold font-mono text-slate-200" id="gps-course">--°</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dilution of Precision Navigation Diagnostics -->
+                    <div class="grid grid-cols-3 gap-2 text-center mb-5 bg-slate-950/20 border border-slate-800/30 rounded-xl p-3">
+                        <div class="cursor-help" title="Horizontal Dilution of Precision">
+                            <span class="text-[10px] text-slate-555 font-semibold block uppercase">HDOP</span>
+                            <span class="text-sm font-bold font-mono text-slate-300" id="gps-hdop">--</span>
+                        </div>
+                        <div class="cursor-help" title="Vertical Dilution of Precision">
+                            <span class="text-[10px] text-slate-555 font-semibold block uppercase">VDOP</span>
+                            <span class="text-sm font-bold font-mono text-slate-300" id="gps-vdop">--</span>
+                        </div>
+                        <div class="cursor-help" title="Position Dilution of Precision">
+                            <span class="text-[10px] text-slate-555 font-semibold block uppercase">PDOP</span>
+                            <span class="text-sm font-bold font-mono text-slate-300" id="gps-pdop">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GENRE 2B: ENVIRONMENTAL METRICS (HTU31D) -->
+                <div class="border-t border-slate-800/50 pt-4 mt-auto">
                     <div class="flex items-center justify-between mb-3">
-                        <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Channel Drill-Down</h3>
-                        <span id="active-drilldown-label" class="text-[10px] font-mono text-indigo-400 font-bold">All Channels</span>
+                        <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Atmospheric Environment</h3>
+                        <span class="text-[10px] text-slate-555 font-mono">HTU31D Sensor</span>
                     </div>
-
-                    <!-- Channel-specific Search Query Input -->
-                    <div class="mb-4">
-                        <div class="relative">
-                            <input type="text" id="channel-query-input" placeholder="Query active channel chatter..." class="w-full bg-slate-950 border border-slate-855 rounded-xl px-4 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500/55 transition-colors" oninput="debounceChannelQuery()">
-                            <button id="clear-channel-query-btn" onclick="clearChannelQuery()" class="absolute right-3 top-2 text-slate-500 hover:text-slate-300 font-mono text-[10px] hidden">✕</button>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Ambient air temperature inside enclosure">
+                            <span class="text-[10px] text-slate-555 font-bold block uppercase">Temperature</span>
+                            <span class="text-base font-bold font-mono text-white"><span id="env-t">--</span>°C</span>
                         </div>
-                    </div>
-
-                    <div class="space-y-1.5" id="channel-filters-container">
-                        <button onclick="setChannelFilter('all')" id="filter-btn-all" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-indigo-950/40 text-indigo-300 border-indigo-500/30">
-                            <span>ALL CHANNELS</span>
-                            <span class="rounded bg-indigo-900/40 px-2 py-0.5 font-bold" id="filter-cnt-all">0</span>
-                        </button>
-                        <button onclick="setChannelFilter('Marine-16')" id="filter-btn-m16" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
-                            <span>CH 16 - CALLING</span>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m16">0</span>
-                        </button>
-                        <button onclick="setChannelFilter('Marine-68')" id="filter-btn-m68" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
-                            <span>CH 68 - FISHING A</span>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m68">0</span>
-                        </button>
-                        <button onclick="setChannelFilter('Marine-69')" id="filter-btn-m69" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
-                            <span>CH 69 - FISHING B</span>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m69">0</span>
-                        </button>
-                        <button onclick="setChannelFilter('NOAA-WX1')" id="filter-btn-noaa" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
-                            <span>NOAA WX1 - WEATHER</span>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-noaa">0</span>
-                        </button>
-                        <button onclick="setChannelFilter('Local-Emergency')" id="filter-btn-emer" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
-                            <span>LOCAL EMERGENCY</span>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-emer">0</span>
-                        </button>
+                        <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Relative humidity">
+                            <span class="text-[10px] text-slate-555 font-bold block uppercase">Humidity</span>
+                            <span class="text-base font-bold font-mono text-slate-200"><span id="env-h">--</span>%</span>
+                        </div>
+                        <div class="bg-slate-900/30 border border-slate-800/20 p-2.5 rounded-lg text-center cursor-help" title="Calculated dew point">
+                            <span class="text-[10px] text-slate-555 font-bold block uppercase">Dew Point</span>
+                            <span class="text-base font-bold font-mono text-slate-300"><span id="env-dp">--</span>°C</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Column 2: Channel Chatter Analytics -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
-                        Chatter Analytics
-                    </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono" id="analytics-window-badge">24h Window</span>
+            <!-- GENRE 3: POWER SYSTEMS (VICTRON MPPT VE.DIRECT) -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
+                            Solar & Battery Power
+                        </h2>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono">Victron MPPT</span>
+                    </div>
+
+                    <!-- Live Power Metrics Grid -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="Battery terminal voltage">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Battery Voltage</span>
+                            <span class="text-2xl font-bold font-mono text-white" id="batt-v">-- V</span>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 cursor-help" title="Net charging/discharging current">
+                            <span class="text-slate-555 text-xs font-semibold block uppercase">Net Current</span>
+                            <span class="text-2xl font-bold font-mono text-white" id="batt-i">-- mA</span>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Power Diagnostics -->
+                    <div class="bg-slate-950/20 border border-slate-800/30 rounded-xl p-4 space-y-2.5 text-sm">
+                        <div class="flex justify-between items-center cursor-help" title="Solar panel input voltage and active power">
+                            <span class="text-slate-400 text-xs uppercase font-semibold">Solar Panel PV</span>
+                            <span class="font-mono text-slate-200"><span id="vic-vpv">--</span> V / <span id="vic-ppv" class="font-bold text-emerald-400">--</span> W</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="Charge algorithm state">
+                            <span class="text-slate-400 text-xs uppercase font-semibold">Charge State</span>
+                            <span class="font-mono text-blue-300 font-bold" id="vic-cs">--</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-slate-800/60 pt-2 cursor-help" title="MPPT load terminal load draw current">
+                            <span class="text-slate-400 text-xs uppercase font-semibold">Load Output Draw</span>
+                            <span class="font-mono text-slate-200"><span id="vic-il">--</span> mA</span>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Window Length Selector -->
-                <div class="grid grid-cols-4 gap-1.5 mb-5 bg-slate-950 p-1.5 rounded-xl border border-slate-800/80">
-                    <button onclick="setMetricsWindow(1)" id="window-btn-1" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">1H</button>
-                    <button onclick="setMetricsWindow(6)" id="window-btn-6" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">6H</button>
-                    <button onclick="setMetricsWindow(24)" id="window-btn-24" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-emerald-950/40 text-emerald-400 border border-emerald-500/20">24H</button>
-                    <button onclick="setMetricsWindow(168)" id="window-btn-168" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">7D</button>
-                </div>
-                
-                <p class="text-xs text-slate-400 mb-4 leading-relaxed font-mono">
-                    Real-time statistics captured across scanning frequencies.
-                </p>
-
-                <!-- Dynamic High-level stats -->
-                <div class="grid grid-cols-2 gap-3 mb-5 text-center">
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
-                        <span class="text-slate-550 text-[10px] font-bold block uppercase tracking-wider">Busiest Channel</span>
-                        <span class="text-xs font-bold font-mono text-white mt-1 block" id="analytics-busiest">--</span>
-                    </div>
-                    <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
-                        <span class="text-slate-550 text-[10px] font-bold block uppercase tracking-wider">Avg Signal SNR</span>
-                        <span class="text-xs font-bold font-mono text-emerald-400 mt-1 block" id="analytics-snr">--</span>
-                    </div>
-                </div>
-
-                <!-- Channel Volume Distribution bars -->
-                <div class="space-y-3.5">
-                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Volume Distribution</h3>
-                    
-                    <!-- Ch 16 -->
-                    <div class="space-y-1">
-                        <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-400 font-semibold">Ch 16 Calling</span>
-                            <span class="text-slate-550" id="vol-txt-m16">0 calls (0s)</span>
+                <!-- Energy Yield Statistics -->
+                <div class="border-t border-slate-800/50 pt-4 mt-auto">
+                    <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">Energy Harvest & Yields</h3>
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Today's harvest statistics">
+                            <span class="text-slate-555 font-semibold block">TODAY</span>
+                            <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h20">--</span> Wh</span>
+                            <span class="text-[10px] text-slate-555 block">Peak: <span id="vic-h21">--</span>W</span>
                         </div>
-                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
-                            <div id="vol-bar-m16" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Ch 68 -->
-                    <div class="space-y-1">
-                        <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-400 font-semibold">Ch 68 Fishing A</span>
-                            <span class="text-slate-550" id="vol-txt-m68">0 calls (0s)</span>
-                        </div>
-                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
-                            <div id="vol-bar-m68" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Ch 69 -->
-                    <div class="space-y-1">
-                        <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-400 font-semibold">Ch 69 Fishing B</span>
-                            <span class="text-slate-550" id="vol-txt-m69">0 calls (0s)</span>
-                        </div>
-                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
-                            <div id="vol-bar-m69" class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <!-- NOAA -->
-                    <div class="space-y-1">
-                        <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-400 font-semibold">NOAA Weather</span>
-                            <span class="text-slate-550" id="vol-txt-noaa">0 calls (0s)</span>
-                        </div>
-                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
-                            <div id="vol-bar-noaa" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Emergency -->
-                    <div class="space-y-1">
-                        <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-400 font-semibold">Local Emergency</span>
-                            <span class="text-slate-550" id="vol-txt-emer">0 calls (0s)</span>
-                        </div>
-                        <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
-                            <div id="vol-bar-emer" class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                        <div class="bg-slate-900/30 border border-slate-800/20 px-3 py-2 rounded-lg cursor-help" title="Yesterday's yield harvest statistics">
+                            <span class="text-slate-555 font-semibold block">YESTERDAY</span>
+                            <span class="font-mono text-slate-200 font-bold text-sm"><span id="vic-h22">--</span> Wh</span>
+                            <span class="text-[10px] text-slate-555 block">Sequence ID: <span id="vic-h23">--</span></span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Column 3: VHF Transcriptions Log -->
-        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between lg:col-span-2">
-            <div>
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
-                        VHF Transcriptions Log
-                    </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/20 font-mono">Log Feed</span>
+        <!-- Power Trend Series & Telemetry Admin Controls -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Time Series Graph -->
+            <div class="glass-card rounded-2xl p-6 lg:col-span-2">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold tracking-wide uppercase text-slate-200">Power System Historical Trends</h3>
+                        <p class="text-xs text-slate-500 font-mono mt-0.5">Dual-Axis Battery Charge and Current Draw (Rolling 30 Minutes)</p>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-mono">
+                        <span class="flex items-center gap-1.5 text-sky-400">
+                            <span class="h-2 w-2 rounded-full bg-sky-400 status-dot text-sky-400"></span> Voltage (V)
+                        </span>
+                        <span class="flex items-center gap-1.5 text-rose-400">
+                            <span class="h-2 w-2 rounded-full bg-rose-400 status-dot text-rose-400"></span> Current (mA)
+                        </span>
+                    </div>
                 </div>
-                
-                <!-- Scrollable Transcripts Container -->
-                <div id="transcripts-log-feed" class="space-y-4 max-h-[350px] overflow-y-auto pr-2">
-                    <p class="text-slate-500 italic text-sm">Listening to radio channels...</p>
+                <div class="h-64 sm:h-72 w-full relative">
+                    <canvas id="powerChart" class="w-full h-full"></canvas>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Live Telemetry & Settings Grid -->
-    <div class="flex flex-col lg:flex-row gap-6 mb-8 items-start">
-        <!-- Left: Live Telemetry Logger -->
-        <div id="json-telemetry-container-div" class="w-full lg:w-2/3">
+            <!-- Telemetry Admin Panel -->
             <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
                 <div>
                     <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-                        <div class="flex items-center gap-2">
-                            <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">Live JSON Data Payload Stream</h3>
-                            <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-emerald-400 border border-emerald-950">Active Stream</span>
-                        </div>
-                        <button id="json-toggle-btn" onclick="toggleJsonTerminal()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 font-mono text-[10px] transition-colors border border-slate-700/50">Expand</button>
-                    </div>
-                    <div id="json-terminal-wrapper" class="hidden bg-slate-950 rounded-xl p-4 border border-slate-900 overflow-x-auto max-h-60 h-60">
-                        <pre class="text-xs font-mono text-emerald-500 leading-relaxed" id="json-console">Waiting for next data packet...</pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right: System Settings & Controls (Always visible, max-w-xl to prevent over-stretching) -->
-        <div id="settings-container-div" class="w-full lg:w-1/3">
-            <div class="glass-card rounded-2xl p-6 w-full max-w-xl lg:mx-0 flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-                        <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">System Settings & Controls</h3>
-                        <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-sky-400 border border-sky-950">Admin Panel</span>
+                        <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">Telemetry Controls</h3>
+                        <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-sky-400 border border-sky-950">Local Panel</span>
                     </div>
                     
-                    <!-- Settings Form Groups -->
-                    <div class="space-y-4 font-mono text-xs">
-                        <!-- Max Segment Duration Control -->
+                    <div class="space-y-6 font-mono text-xs">
                         <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
                             <div class="flex justify-between items-center mb-2">
-                                <span class="text-slate-300 font-semibold">Max Segment Duration:</span>
-                                <span id="max-duration-val-label" class="text-sky-400 font-bold">10s</span>
+                                <span class="text-slate-300 font-semibold">Dashboard Update Rate:</span>
+                                <span id="telemetry-rate-label" class="text-sky-400 font-bold">15s</span>
                             </div>
-                            <input type="range" id="max-duration-slider" min="5" max="120" step="5" value="10" oninput="updateSliderLabel(this.value)" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                            <input type="range" id="telemetry-rate-slider" min="5" max="60" step="5" value="15" oninput="updateTelemetrySliderLabel(this.value)" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-sky-500">
                             <div class="flex justify-between text-[10px] text-slate-500 mt-1">
                                 <span>5s</span>
+                                <span>15s</span>
                                 <span>30s</span>
                                 <span>60s</span>
-                                <span>120s</span>
-                            </div>
-                            
-                            <!-- Quick Presets -->
-                            <div class="grid grid-cols-4 gap-1.5 mt-3">
-                                <button onclick="setDurationPreset(10)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">10s</button>
-                                <button onclick="setDurationPreset(30)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">30s</button>
-                                <button onclick="setDurationPreset(60)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">60s</button>
-                                <button onclick="setDurationPreset(120)" class="py-1 rounded bg-slate-950 text-slate-450 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">120s</button>
                             </div>
                         </div>
 
-                        <!-- NOAA Weather Channel Control -->
                         <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
                             <div class="flex justify-between items-center">
                                 <div>
-                                    <span class="text-slate-350 font-semibold block">Monitor NOAA Weather</span>
-                                    <span class="text-[10px] text-slate-550 block mt-0.5">Continuous 162.550 MHz broadcast</span>
+                                    <span class="text-slate-350 font-semibold block">Attitude Smoothing</span>
+                                    <span class="text-[10px] text-slate-500 block mt-0.5">Filter dynamic spikes client-side</span>
                                 </div>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="noaa-enabled-checkbox" class="sr-only peer" checked>
+                                    <input type="checkbox" id="attitude-smooth-checkbox" class="sr-only peer" checked>
                                     <div class="w-9 h-5 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500 peer-checked:after:bg-white"></div>
                                 </label>
                             </div>
                         </div>
 
-                        <!-- Emergency & Police Channel Control -->
-                        <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <span class="text-slate-350 font-semibold block">Monitor Emergency & Police</span>
-                                    <span class="text-[10px] text-slate-550 block mt-0.5">Local Emergency & WCPD channels</span>
-                                </div>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="emergency-enabled-checkbox" class="sr-only peer" checked>
-                                    <div class="w-9 h-5 bg-slate-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500 peer-checked:after:bg-white"></div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <button onclick="saveSystemSettings()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
-                            Apply Settings
+                        <button onclick="saveTelemetrySettings()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
+                            Apply Local Controls
                         </button>
                         
-                        <div id="settings-status-msg" class="text-[10px] text-center font-mono py-1 min-h-[1.5rem] text-slate-550"></div>
+                        <div id="telemetry-status-msg" class="text-[10px] text-center font-mono py-1 min-h-[1.5rem] text-slate-500"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- System Service Logs Viewer -->
-    <div id="service-logs-container-div" class="w-full mb-8">
+    <!-- TAB VIEW 2: VHF SDR SPECTRUM & TRANSCRIPTIONS -->
+    <div id="view-vhf" class="space-y-6 hidden">
+        
+        <!-- Full-Width SDR Waterfall & FFT Spectrum Canvas Card -->
+        <div class="glass-card rounded-2xl p-6 w-full">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                <div>
+                    <h3 class="text-lg font-bold tracking-wide uppercase text-slate-200">SDR Waterfall & FFT Spectrum</h3>
+                    <p class="text-xs text-slate-500 font-mono mt-0.5">Realtime cascading frequency sweeps and spectral peaks</p>
+                </div>
+                <!-- Status Badges Grid -->
+                <div class="grid grid-cols-2 sm:flex items-center gap-2 font-mono text-[10px]">
+                    <span class="rounded bg-slate-950/80 px-2.5 py-1 text-slate-400 border border-slate-800">
+                        Center: <span id="sdr-center-val" class="font-bold text-sky-400">156.600 MHz</span>
+                    </span>
+                    <span class="rounded bg-slate-950/80 px-2.5 py-1 text-slate-400 border border-slate-800">
+                        Span: <span id="sdr-span-val" class="font-bold text-indigo-400">1.024 MHz</span>
+                    </span>
+                    <span class="rounded bg-slate-950/80 px-2.5 py-1 text-slate-400 border border-slate-800">
+                        Gain: <span id="sdr-gain-val" class="font-bold text-emerald-400">40.0 dB</span>
+                    </span>
+                    <span class="rounded bg-slate-950/80 px-2.5 py-1 text-slate-400 border border-slate-800">
+                        Squelch: <span id="sdr-squelch-val" class="font-bold text-rose-400">--</span>
+                    </span>
+                </div>
+            </div>
+            
+            <!-- SDR Canvas Container -->
+            <div class="relative w-full overflow-hidden bg-slate-950 border border-slate-900 rounded-xl" style="height: 320px;">
+                <canvas id="sdrCanvas" class="w-full h-full block"></canvas>
+                <!-- Squelch Line Marker Label overlay -->
+                <div id="sdr-squelch-label" class="absolute left-2 font-mono text-[9px] text-rose-500/80 border-t border-rose-500/40 w-full pointer-events-none select-none" style="top: 50%; padding-top: 2px;">Squelch Threshold</div>
+            </div>
+        </div>
+
+        <!-- Full-Width VHF Transmission Activity Histogram -->
+        <div class="glass-card rounded-2xl p-6 w-full">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                <div>
+                    <h3 class="text-sm font-bold tracking-wider uppercase text-slate-200">Transmission Activity Histogram</h3>
+                    <p class="text-xs text-slate-500 font-mono mt-0.5">Call frequency trends over time (Timezone: <span id="histogram-timezone-label" class="text-indigo-400 font-bold">Local</span>)</p>
+                </div>
+                <!-- Duration Controls -->
+                <div class="flex gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800/80">
+                    <button onclick="setHistogramDuration('1d')" id="hist-btn-1d" class="px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-indigo-950/40 text-indigo-400 border border-indigo-500/20">1D</button>
+                    <button onclick="setHistogramDuration('5d')" id="hist-btn-5d" class="px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">5D</button>
+                    <button onclick="setHistogramDuration('7d')" id="hist-btn-7d" class="px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">7D</button>
+                </div>
+            </div>
+            <div class="relative w-full overflow-hidden bg-slate-950 border border-slate-900 rounded-xl" style="height: 180px;">
+                <canvas id="histogramChart" class="w-full h-full block"></canvas>
+            </div>
+        </div>
+
+        <!-- Unified VHF Transcription Layout Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            <!-- Column 1: Search & Channel Drill-Down -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex items-center justify-between mb-5">
+                            <h2 class="text-lg font-bold tracking-wide uppercase text-sky-400 flex items-center gap-2">
+                                Semantic Radio Search
+                            </h2>
+                            <span class="text-xs px-2.5 py-0.5 rounded-full bg-sky-900/30 text-sky-300 border border-sky-500/10 font-mono">Global Store</span>
+                        </div>
+                        
+                        <!-- Search Input Group -->
+                        <div class="space-y-2.5">
+                            <input type="text" id="semantic-search-input" placeholder="e.g. distress signal or coast guard..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-sky-500/55 transition-colors">
+                            <button onclick="performSemanticSearch()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
+                                Query Vector Store
+                            </button>
+                        </div>
+                        <div id="search-results-container" class="mt-3.5 space-y-2 text-xs max-h-36 overflow-y-auto font-mono border-t border-slate-800/40 pt-3">
+                            <p class="text-slate-500 italic">No active search matches displayed.</p>
+                        </div>
+                    </div>
+
+                    <!-- Channel Drill-Down Filters -->
+                    <div class="border-t border-slate-800/50 pt-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider">Channel Drill-Down</h3>
+                            <span id="active-drilldown-label" class="text-[10px] font-mono text-indigo-400 font-bold">All Channels</span>
+                        </div>
+
+                        <!-- Channel-specific Search Query Input -->
+                        <div class="mb-4">
+                            <div class="relative">
+                                <input type="text" id="channel-query-input" placeholder="Query active channel chatter..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500/55 transition-colors" oninput="debounceChannelQuery()">
+                                <button id="clear-channel-query-btn" onclick="clearChannelQuery()" class="absolute right-3 top-2 text-slate-505 hover:text-slate-300 font-mono text-[10px] hidden">✕</button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1.5" id="channel-filters-container">
+                            <button onclick="setChannelFilter('all')" id="filter-btn-all" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-indigo-950/40 text-indigo-300 border-indigo-500/30">
+                                <span>ALL CHANNELS</span>
+                                <span class="rounded bg-indigo-900/40 px-2 py-0.5 font-bold" id="filter-cnt-all">0</span>
+                            </button>
+                            <button onclick="setChannelFilter('Marine-16')" id="filter-btn-m16" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                                <span>CH 16 - CALLING</span>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m16">0</span>
+                            </button>
+                            <button onclick="setChannelFilter('Marine-68')" id="filter-btn-m68" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                                <span>CH 68 - FISHING A</span>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m68">0</span>
+                            </button>
+                            <button onclick="setChannelFilter('Marine-69')" id="filter-btn-m69" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                                <span>CH 69 - FISHING B</span>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-m69">0</span>
+                            </button>
+                            <button onclick="setChannelFilter('NOAA-WX1')" id="filter-btn-noaa" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                                <span>NOAA WX1 - WEATHER</span>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-noaa">0</span>
+                            </button>
+                            <button onclick="setChannelFilter('Local-Emergency')" id="filter-btn-emer" class="w-full text-left px-4 py-2 rounded-xl border font-mono text-[11px] font-semibold flex justify-between items-center transition-all bg-slate-900/20 text-slate-400 border-slate-800/40 hover:bg-slate-900/40">
+                                <span>LOCAL EMERGENCY</span>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-bold" id="filter-cnt-emer">0</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 2: Channel Chatter Analytics -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-bold tracking-wide uppercase text-emerald-400 flex items-center gap-2">
+                            Chatter Analytics
+                        </h2>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-900/30 text-emerald-300 border border-emerald-500/10 font-mono" id="analytics-window-badge">24h Window</span>
+                    </div>
+
+                    <!-- Window Length Selector -->
+                    <div class="grid grid-cols-4 gap-1.5 mb-5 bg-slate-950 p-1.5 rounded-xl border border-slate-800/80">
+                        <button onclick="setMetricsWindow(1)" id="window-btn-1" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">1H</button>
+                        <button onclick="setMetricsWindow(6)" id="window-btn-6" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">6H</button>
+                        <button onclick="setMetricsWindow(24)" id="window-btn-24" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-emerald-950/40 text-emerald-400 border border-emerald-500/20">24H</button>
+                        <button onclick="setMetricsWindow(168)" id="window-btn-168" class="py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200">7D</button>
+                    </div>
+                    
+                    <p class="text-xs text-slate-400 mb-4 leading-relaxed font-mono">
+                        Real-time statistics captured across scanning frequencies.
+                    </p>
+
+                    <!-- Dynamic High-level stats -->
+                    <div class="grid grid-cols-2 gap-3 mb-5 text-center">
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
+                            <span class="text-slate-555 text-[10px] font-bold block uppercase tracking-wider">Busiest Channel</span>
+                            <span class="text-xs font-bold font-mono text-white mt-1 block" id="analytics-busiest">--</span>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800/40 rounded-xl p-3 shadow-inner">
+                            <span class="text-slate-555 text-[10px] font-bold block uppercase tracking-wider">Avg Signal SNR</span>
+                            <span class="text-xs font-bold font-mono text-emerald-400 mt-1 block" id="analytics-snr">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Channel Volume Distribution bars -->
+                    <div class="space-y-3.5">
+                        <h3 class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Volume Distribution</h3>
+                        
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] font-mono">
+                                <span class="text-slate-400 font-semibold">Ch 16 Calling</span>
+                                <span class="text-slate-555" id="vol-txt-m16">0 calls (0s)</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                                <div id="vol-bar-m16" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] font-mono">
+                                <span class="text-slate-400 font-semibold">Ch 68 Fishing A</span>
+                                <span class="text-slate-555" id="vol-txt-m68">0 calls (0s)</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                                <div id="vol-bar-m68" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] font-mono">
+                                <span class="text-slate-400 font-semibold">Ch 69 Fishing B</span>
+                                <span class="text-slate-555" id="vol-txt-m69">0 calls (0s)</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                                <div id="vol-bar-m69" class="bg-teal-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] font-mono">
+                                <span class="text-slate-400 font-semibold">NOAA Weather</span>
+                                <span class="text-slate-555" id="vol-txt-noaa">0 calls (0s)</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                                <div id="vol-bar-noaa" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="flex justify-between items-center text-[10px] font-mono">
+                                <span class="text-slate-400 font-semibold">Local Emergency</span>
+                                <span class="text-slate-555" id="vol-txt-emer">0 calls (0s)</span>
+                            </div>
+                            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-900">
+                                <div id="vol-bar-emer" class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 3: VHF Transcriptions Log -->
+            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between lg:col-span-2">
+                <div>
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex flex-col">
+                            <h2 class="text-lg font-bold tracking-wide uppercase text-indigo-400 flex items-center gap-2">
+                                VHF Transcriptions Log
+                            </h2>
+                            <p class="text-[10px] text-slate-500 font-mono mt-0.5">Timezone: <span id="transcripts-timezone-label" class="text-indigo-400 font-bold">Local</span></p>
+                        </div>
+                        <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-500/20 font-mono">Log Feed</span>
+                    </div>
+                    
+                    <div id="transcripts-log-feed" class="space-y-4 max-h-[350px] overflow-y-auto pr-2">
+                        <p class="text-slate-500 italic text-sm">Listening to radio channels...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Telemetry Logger & VHF Admin Panel -->
+        <div class="flex flex-col lg:flex-row gap-6 items-start">
+            
+            <!-- Left: Live Telemetry Logger -->
+            <div id="json-telemetry-container-div" class="w-full lg:w-2/3">
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">Live JSON Data Payload Stream</h3>
+                                <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-emerald-400 border border-emerald-950">Active Stream</span>
+                            </div>
+                            <button id="json-toggle-btn" onclick="toggleJsonTerminal()" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 font-mono text-[10px] transition-colors border border-slate-700/50">Expand</button>
+                        </div>
+                        <div id="json-terminal-wrapper" class="hidden bg-slate-950 rounded-xl p-4 border border-slate-900 overflow-x-auto max-h-60 h-60">
+                            <pre class="text-xs font-mono text-emerald-500 leading-relaxed" id="json-console">Waiting for next data packet...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: VHF Settings & Controls (Admin Panel) -->
+            <div id="settings-container-div" class="w-full lg:w-1/3">
+                <div class="glass-card rounded-2xl p-6 w-full max-w-xl lg:mx-0 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                            <h3 class="text-sm font-bold tracking-wider uppercase text-slate-400">SDR Settings & Controls</h3>
+                            <span class="rounded bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-sky-400 border border-sky-950">Admin Panel</span>
+                        </div>
+                        
+                        <div class="space-y-4 font-mono text-xs">
+                            <!-- Tuner Preset Profile Selector -->
+                            <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                                <label for="tuner-preset-select" class="text-slate-300 font-semibold block mb-2">Tuner Preset Profile:</label>
+                                <select id="tuner-preset-select" onchange="applyPresetImmediately(this.value)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500/55 transition-colors">
+                                    <option value="marine_vhf">Marine VHF (156.6 MHz)</option>
+                                    <option value="noaa_wx">NOAA Weather (162.55 MHz)</option>
+
+                                    <option value="local_emergency">Local Emergency Responder</option>
+                                    <option value="fm_radio">FM Broadcast Radio (98.1 MHz)</option>
+                                </select>
+                            </div>
+
+                            <!-- Receiver Gain Control -->
+                            <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-slate-300 font-semibold">Receiver Gain:</span>
+                                    <span id="tuner-gain-val-label" class="text-emerald-400 font-bold">40.0 dB</span>
+                                </div>
+                                <input type="range" id="tuner-gain-slider" min="0" max="50" step="1" value="40" oninput="safeSetText('tuner-gain-val-label', parseFloat(this.value).toFixed(1) + ' dB')" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                                <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                    <span>0 dB (Auto)</span>
+                                    <span>25 dB</span>
+                                    <span>50 dB</span>
+                                </div>
+                            </div>
+
+                            <!-- Squelch Level Control -->
+                            <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-slate-300 font-semibold">Squelch Threshold:</span>
+                                    <span id="tuner-squelch-val-label" class="text-rose-400 font-bold">25</span>
+                                </div>
+                                <input type="range" id="tuner-squelch-slider" min="0" max="300" step="5" value="25" oninput="safeSetText('tuner-squelch-val-label', this.value)" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-rose-500">
+                                <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                    <span>0 (Open)</span>
+                                    <span>150</span>
+                                    <span>300 (Tight)</span>
+                                </div>
+                            </div>
+
+                            <!-- Center Frequency and Span Manual Override -->
+                            <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="tuner-center-input" class="text-slate-300 font-semibold block mb-1">Center (MHz):</label>
+                                        <input type="number" id="tuner-center-input" step="0.005" min="24" max="1700" value="156.600" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500/55 transition-colors">
+                                    </div>
+                                    <div>
+                                        <label for="tuner-span-select" class="text-slate-300 font-semibold block mb-1">Span/Bandwidth:</label>
+                                        <select id="tuner-span-select" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500/55 transition-colors">
+                                            <option value="200000">200 kHz</option>
+                                            <option value="250000">250 kHz</option>
+                                            <option value="500000">500 kHz</option>
+                                            <option value="1024000">1.024 MHz</option>
+                                            <option value="2048000">2.048 MHz</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Max Segment Duration Control -->
+                            <div class="bg-slate-900/30 border border-slate-800/30 rounded-xl p-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-slate-300 font-semibold">Max Segment Duration:</span>
+                                    <span id="max-duration-val-label" class="text-sky-400 font-bold">10s</span>
+                                </div>
+                                <input type="range" id="max-duration-slider" min="5" max="120" step="5" value="10" oninput="updateSliderLabel(this.value)" class="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-sky-500">
+                                <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+                                    <span>5s</span>
+                                    <span>30s</span>
+                                    <span>60s</span>
+                                    <span>120s</span>
+                                </div>
+                                
+                                <div class="grid grid-cols-4 gap-1.5 mt-3">
+                                    <button onclick="setDurationPreset(10)" class="py-1 rounded bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">10s</button>
+                                    <button onclick="setDurationPreset(30)" class="py-1 rounded bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">30s</button>
+                                    <button onclick="setDurationPreset(60)" class="py-1 rounded bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">60s</button>
+                                    <button onclick="setDurationPreset(120)" class="py-1 rounded bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 text-[10px] font-bold transition-colors">120s</button>
+                                </div>
+                            </div>
+
+                            <button onclick="saveTunerSettings()" class="w-full bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg hover:shadow-sky-500/10 font-mono">
+                                Apply Tuner Settings
+                            </button>
+                            
+                            <div id="settings-status-msg" class="text-[10px] text-center font-mono py-1 min-h-[1.5rem] text-slate-500"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- SYSTEM SERVICE LOGS VIEWER (Pinned at bottom of both views) -->
+    <div id="service-logs-container-div" class="w-full mb-8 mt-6">
         <div class="glass-card rounded-2xl p-6 w-full flex flex-col justify-between">
             <div>
-                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-800 pb-4 mb-4">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-800 pb-4">
                     <div>
                         <h3 class="text-sm font-bold tracking-wider uppercase text-slate-200">System Logs Viewer</h3>
                         <p class="text-xs text-slate-500 font-mono mt-0.5">Real-time journal logs tailing remote buoy services</p>
@@ -624,7 +780,7 @@
                 <div id="logs-terminal-wrapper" class="hidden mt-4 space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                         <!-- Service Selector Tabs -->
-                        <div class="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+                        <div class="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                             <button onclick="setActiveLogService('transcriber')" id="log-tab-transcriber" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20">Transcriber</button>
                             <button onclick="setActiveLogService('sensor')" id="log-tab-sensor" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">Sensors</button>
                             <button onclick="setActiveLogService('web')" id="log-tab-web" class="px-2.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent">Web</button>
@@ -633,7 +789,7 @@
                         
                         <!-- Filter and Actions -->
                         <div class="flex items-center gap-3 text-xs font-mono w-full sm:w-auto">
-                            <input type="text" id="log-filter-input" placeholder="Filter log entries..." class="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-[10px] font-mono text-white focus:outline-none focus:border-sky-500/30 w-full sm:w-48" oninput="renderServiceLogs()">
+                            <input type="text" id="log-filter-input" placeholder="Filter log entries..." class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-[10px] font-mono text-white focus:outline-none focus:border-sky-500/30 w-full sm:w-48" oninput="renderServiceLogs()">
                             <button onclick="fetchServiceLogs()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-400 hover:text-sky-300 transition-colors border border-slate-700/50 text-[10px] whitespace-nowrap">Refresh</button>
                         </div>
                     </div>
@@ -647,6 +803,7 @@
     </div>
 
     <script>
+        // ChartJS configuration
         const ctx = document.getElementById('powerChart').getContext('2d');
         const powerChart = new Chart(ctx, {
             type: 'line',
@@ -709,6 +866,55 @@
             }
         });
 
+        // Histogram ChartJS configuration
+        const ctxHist = document.getElementById('histogramChart').getContext('2d');
+        const histogramChart = new Chart(ctxHist, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Call Count',
+                        backgroundColor: 'rgba(99, 102, 241, 0.45)',
+                        borderColor: '#6366f1',
+                        borderWidth: 1.5,
+                        borderRadius: 4,
+                        data: []
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 9 } },
+                        grid: { color: 'rgba(51, 65, 85, 0.2)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { 
+                            stepSize: 1, 
+                            precision: 0,
+                            color: '#94a3b8', 
+                            font: { family: 'JetBrains Mono', size: 9 } 
+                        },
+                        grid: { color: 'rgba(51, 65, 85, 0.2)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Set timezone labels on load
+        const userTzName = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+        const tzLabelEl = document.getElementById('histogram-timezone-label');
+        if (tzLabelEl) tzLabelEl.innerText = userTzName;
+        const transTzLabelEl = document.getElementById('transcripts-timezone-label');
+        if (transTzLabelEl) transTzLabelEl.innerText = userTzName;
+
         function safeSetText(id, val) {
             const el = document.getElementById(id);
             if (el) {
@@ -716,15 +922,111 @@
             }
         }
 
-        // Global state
+        // Global UI & View State
+        let activeView = 'telemetry';
+        let telemetryIntervalSeconds = parseInt(localStorage.getItem('telemetryInterval') || '15');
+        let telemetryTimer = null;
+        let transcriptsTimer = null;
+        let metricsTimer = null;
+        let logsTimer = null;
+        let tunerTimer = null;
+
+        // Global data stores
         let allTranscripts = [];
         let activeFilterChannel = 'all';
         let channelSearchQuery = '';
         let metricsWindowHours = 24;
         let channelQueryTimeout = null;
+        let histogramDuration = '1d';
         let activeLogService = 'transcriber';
         let rawLogLines = [];
 
+        // Tuner configuration state
+        let tunerState = {
+            device_type: "rtl-airband",
+            center_frequency_hz: 156600000,
+            span_hz: 1024000,
+            gain_db: 40.0,
+            squelch_level: 150,
+            noaa_enabled: false,
+            emergency_enabled: true,
+            frequencies: []
+        };
+
+        // IMU Calibration offsets
+        let imuPitchOffset = 0.0;
+        let imuRollOffset = 0.0;
+        let imuHeadingOffset = 0.0;
+
+        // Active peaks for SDR visualization
+        let sdrPeaks = {}; // freq_hz -> { current_power: float, target_power: float }
+
+        // Switch View Tabs
+        function switchView(viewName) {
+            activeView = viewName;
+            const viewTelemetry = document.getElementById('view-telemetry');
+            const viewVhf = document.getElementById('view-vhf');
+            
+            const btnTelemetry = document.getElementById('nav-btn-telemetry');
+            const btnVhf = document.getElementById('nav-btn-vhf');
+            
+            if (viewName === 'telemetry') {
+                viewTelemetry.classList.remove('hidden');
+                viewVhf.classList.add('hidden');
+                
+                btnTelemetry.className = "px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20";
+                btnVhf.className = "px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all text-slate-450 hover:text-slate-200 border border-transparent";
+            } else {
+                viewTelemetry.classList.add('hidden');
+                viewVhf.classList.remove('hidden');
+                
+                btnTelemetry.className = "px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all text-slate-450 hover:text-slate-200 border border-transparent";
+                btnVhf.className = "px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all bg-sky-950/40 text-sky-400 border border-sky-500/20";
+                
+                // Trigger SDR Canvas sizing alignment on view switch
+                setTimeout(resizeCanvas, 50);
+            }
+            
+            // Close mobile menu on switch
+            document.getElementById('mobile-menu').classList.add('hidden');
+        }
+
+        // Toggle Hamburger dropdown menu
+        function toggleHamburger() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Update Telemetry Local Update Slider Label
+        function updateTelemetrySliderLabel(val) {
+            document.getElementById('telemetry-rate-label').innerText = val + 's';
+        }
+
+        // Apply Telemetry settings client-side
+        function saveTelemetrySettings() {
+            const sliderVal = document.getElementById('telemetry-rate-slider').value;
+            telemetryIntervalSeconds = parseInt(sliderVal);
+            localStorage.setItem('telemetryInterval', sliderVal);
+            
+            const statusEl = document.getElementById('telemetry-status-msg');
+            statusEl.innerText = "Local controls applied.";
+            statusEl.className = "text-[10px] text-center font-mono py-1 text-emerald-400";
+            
+            // Re-setup timer
+            setupTelemetryTimer();
+            
+            setTimeout(() => {
+                statusEl.innerText = "";
+            }, 3000);
+        }
+
+        function setupTelemetryTimer() {
+            if (telemetryTimer) clearInterval(telemetryTimer);
+            fetchData(); // Immediate fetch
+            telemetryTimer = setInterval(fetchData, telemetryIntervalSeconds * 1000);
+        }
+
+        // Main data fetch loops
         async function fetchData() {
             try {
                 const response = await fetch('/api/data');
@@ -734,7 +1036,7 @@
                     const latest = data[data.length - 1];
                     const sensors = latest.sensors;
                     
-                    // Update JSON raw payload terminal console
+                    // Update JSON raw payload console
                     safeSetText('json-console', JSON.stringify(latest, null, 2));
                     
                     // Update Top Stats
@@ -808,19 +1110,19 @@
                         // Quaternions to Euler Angles
                         const sinr_cosp = 2 * (qw * qx + qy * qz);
                         const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
-                        const roll = Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI);
+                        const roll = (Math.atan2(sinr_cosp, cosr_cosp) * (180 / Math.PI)) - imuRollOffset;
                         
                         const sinp = 2 * (qw * qy - qz * qx);
                         let pitch;
                         if (Math.abs(sinp) >= 1) {
-                            pitch = Math.sign(sinp) * (Math.PI / 2) * (180 / Math.PI);
+                            pitch = (Math.sign(sinp) * (Math.PI / 2) * (180 / Math.PI)) - imuPitchOffset;
                         } else {
-                            pitch = Math.asin(sinp) * (180 / Math.PI);
+                            pitch = (Math.asin(sinp) * (180 / Math.PI)) - imuPitchOffset;
                         }
                         
                         const siny_cosp = 2 * (qw * qz + qx * qy);
                         const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
-                        let heading = Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI);
+                        let heading = (Math.atan2(siny_cosp, cosy_cosp) * (180 / Math.PI)) - imuHeadingOffset;
                         if (heading < 0) heading += 360;
                         
                         // Update attitude numeric metrics
@@ -834,6 +1136,8 @@
                         // Rotate CSS buoy model graphic
                         const visualBuoy = document.getElementById('buoy-graphic');
                         if (visualBuoy) {
+                            // Optionally apply smooth client filter if checked
+                            const smooth = document.getElementById('attitude-smooth-checkbox').checked;
                             visualBuoy.style.transform = `rotate(${roll.toFixed(1)}deg) translateY(${pitch.toFixed(1) * 2}px)`;
                         }
                         
@@ -887,9 +1191,88 @@
                 
                 allTranscripts = data;
                 renderTranscriptsLog();
+                
+                // Inspect transcript timestamps to map active signal peaks on SDR spectrum
+                updateSdrActiveSignals();
+                
+                // Update dynamic timeseries call histogram
+                fetchHistogramData();
             } catch (error) {
                 console.error("Error fetching transcripts:", error);
             }
+        }
+
+        function updateSdrActiveSignals() {
+            const now = new Date();
+            // Reset active targets first
+            Object.keys(sdrPeaks).forEach(f => {
+                sdrPeaks[f].target_power = -90.0; // background noise target
+            });
+            
+            // Loop through transcripts and find transmissions in the last 20 seconds
+            allTranscripts.forEach(t => {
+                const ts = new Date(t.timestamp);
+                const diffMs = now - ts;
+                if (diffMs > 0 && diffMs < 20000) {
+                    const freq = t.frequency_hz;
+                    if (freq) {
+                        if (!sdrPeaks[freq]) {
+                            sdrPeaks[freq] = { current_power: -90.0, target_power: -90.0 };
+                        }
+                        // Increase power based on SNR or defaults
+                        const snr = t.snr_db || 20.0;
+                        sdrPeaks[freq].target_power = -50.0 + (snr / 2); // mapping to peak amplitude
+                    }
+                }
+            });
+
+            // NOAA Weather station is a continuous transmitter.
+            // If NOAA mode is enabled, map a persistent real peak at 162550000 Hz.
+            if (tunerState.noaa_enabled) {
+                const noaaFreq = 162550000;
+                if (!sdrPeaks[noaaFreq]) {
+                    sdrPeaks[noaaFreq] = { current_power: -90.0, target_power: -90.0 };
+                }
+                sdrPeaks[noaaFreq].target_power = -35.0; // strong real NOAA peak representation
+            }
+        }
+
+        async function fetchHistogramData() {
+            if (!histogramChart) return;
+            try {
+                let url = `/api/transcripts/histogram?duration=${histogramDuration}`;
+                if (activeFilterChannel && activeFilterChannel !== 'all') {
+                    url += `&channel=${encodeURIComponent(activeFilterChannel)}`;
+                }
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data && data.labels) {
+                    histogramChart.data.labels = data.labels;
+                    histogramChart.data.datasets[0].data = data.counts;
+                    histogramChart.update();
+                }
+            } catch (error) {
+                console.error("Error fetching histogram data:", error);
+            }
+        }
+
+        function setHistogramDuration(duration) {
+            histogramDuration = duration;
+            
+            const durs = ['1d', '5d', '7d'];
+            durs.forEach(d => {
+                const btnEl = document.getElementById(`hist-btn-${d}`);
+                if (btnEl) {
+                    if (d === duration) {
+                        btnEl.className = "px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition-all bg-indigo-950/40 text-indigo-400 border border-indigo-500/20";
+                    } else {
+                        btnEl.className = "px-3 py-1 rounded-lg text-[10px] font-mono font-bold transition-all text-slate-400 hover:text-slate-200 border border-transparent";
+                    }
+                }
+            });
+            
+            fetchHistogramData();
         }
 
         async function fetchMetrics() {
@@ -941,7 +1324,6 @@
                 'Local-Emergency': 'Local Emergency'
             };
 
-            // Reset all UI elements
             channels.forEach(c => {
                 safeSetText(badgeIds[c], '0');
                 safeSetText(txtIds[c], '0 calls (0s)');
@@ -949,7 +1331,6 @@
                 if (bar) bar.style.width = '0%';
             });
             
-            // Loop through metrics
             Object.keys(metricsData).forEach(c => {
                 const item = metricsData[c];
                 totalCalls += item.count;
@@ -957,16 +1338,13 @@
                 if (badgeIds[c]) {
                     safeSetText(badgeIds[c], item.count);
                 }
-                
                 if (txtIds[c]) {
                     safeSetText(txtIds[c], `${item.count} calls (${item.total_duration.toFixed(0)}s)`);
                 }
-                
                 if (item.count > maxCalls) {
                     maxCalls = item.count;
                     busiestChan = chanDisplayName[c] || c;
                 }
-                
                 if (item.avg_snr > 0) {
                     sumSnr += item.avg_snr * item.count;
                     countSnr += item.count;
@@ -979,7 +1357,6 @@
             const avgSnr = countSnr > 0 ? (sumSnr / countSnr).toFixed(1) + ' dB' : '--';
             safeSetText('analytics-snr', avgSnr);
             
-            // Set percentages for volume bars
             channels.forEach(c => {
                 const item = metricsData[c] || { count: 0 };
                 const pct = totalCalls > 0 ? (item.count / totalCalls) * 100 : 0;
@@ -1019,14 +1396,14 @@
                             </div>
                             <div class="flex items-center gap-3">
                                 <span>SNR: <span class="text-emerald-400 font-bold">${t.snr_db} dB</span></span>
-                                <span>${ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>
+                                <span>${ts.toLocaleDateString()} ${ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit', timeZoneName: 'short'})}</span>
                             </div>
                         </div>
                         <p class="text-slate-200 text-sm font-mono leading-relaxed bg-slate-950/30 p-2.5 rounded border border-slate-900/30">
                             ${t.transcript_text || '<span class="text-slate-600 italic">No clear speech recognized</span>'}
                         </p>
                         <div class="flex justify-between items-center text-[10px] font-mono">
-                            <span class="text-slate-500">Duration: ${t.duration_seconds}s</span>
+                            <span class="text-slate-555 font-bold">Duration: ${t.duration_seconds}s</span>
                             ${audioHtml}
                         </div>
                     </div>
@@ -1037,7 +1414,6 @@
         function setChannelFilter(channel) {
             activeFilterChannel = channel;
             
-            // Remove active classes from all buttons and add to clicked
             const btns = [
                 { id: 'filter-btn-all', key: 'all', label: 'All Channels' },
                 { id: 'filter-btn-m16', key: 'Marine-16', label: 'CH 16 Calling' },
@@ -1066,7 +1442,6 @@
             
             safeSetText('active-drilldown-label', activeLabel);
             
-            // Clear current query when switching channel filter
             const input = document.getElementById('channel-query-input');
             if (input) {
                 input.value = '';
@@ -1080,15 +1455,12 @@
 
         function setMetricsWindow(hours) {
             metricsWindowHours = hours;
-            
-            // Update UI badge label
             const badge = document.getElementById('analytics-window-badge');
             if (badge) {
                 const labelMap = { 1: '1h Window', 6: '6h Window', 24: '24h Window', 168: '7d Window' };
                 badge.innerText = labelMap[hours] || `${hours}h Window`;
             }
             
-            // Update active state on window selector buttons
             const btns = [1, 6, 24, 168];
             btns.forEach(b => {
                 const btnEl = document.getElementById(`window-btn-${b}`);
@@ -1154,7 +1526,7 @@
                 const data = await response.json();
                 
                 if (data.error) {
-                    if (container) container.innerHTML = `<p class="text-rose-400 text-[10px]">Error: ${data.error}</p>`;
+                    if (container) container.innerHTML = `<p class="text-rose-450 text-[10px]">Error: ${data.error}</p>`;
                     return;
                 }
                 
@@ -1179,7 +1551,7 @@
                 }
             } catch (error) {
                 console.error("Error executing semantic search:", error);
-                if (container) container.innerHTML = '<p class="text-rose-400 text-[10px]">Query execution failed.</p>';
+                if (container) container.innerHTML = '<p class="text-rose-450 text-[10px]">Query execution failed.</p>';
             }
         }
 
@@ -1229,7 +1601,6 @@
             
             el.innerText = filtered.join('\n');
             
-            // Auto-scroll to bottom
             const container = document.getElementById('log-terminal-container');
             if (container) {
                 container.scrollTop = container.scrollHeight;
@@ -1239,7 +1610,6 @@
         function setActiveLogService(service) {
             activeLogService = service;
             
-            // Update tabs UI
             const services = ['transcriber', 'sensor', 'web', 'ntrip'];
             services.forEach(s => {
                 const tab = document.getElementById(`log-tab-${s}`);
@@ -1253,14 +1623,6 @@
             });
             
             fetchServiceLogs();
-        }
-
-        function runMainLoops() {
-            fetchData();
-            fetchTranscripts();
-            fetchMetrics();
-            fetchServiceLogs();
-            fetchSystemSettings();
         }
 
         function toggleJsonTerminal() {
@@ -1283,6 +1645,7 @@
             btn.innerText = isHidden ? 'Expand' : 'Collapse';
         }
 
+        // Fetch System Settings from SQLite
         async function fetchSystemSettings() {
             try {
                 const response = await fetch('/api/settings');
@@ -1292,36 +1655,137 @@
                     document.getElementById('max-duration-slider').value = val;
                     document.getElementById('max-duration-val-label').innerText = val + 's';
                 }
-                if (data.noaa_enabled !== undefined) {
-                    document.getElementById('noaa-enabled-checkbox').checked = data.noaa_enabled;
-                }
-                if (data.emergency_enabled !== undefined) {
-                    document.getElementById('emergency-enabled-checkbox').checked = data.emergency_enabled;
-                }
+                if (data.imu_pitch_offset !== undefined) imuPitchOffset = parseFloat(data.imu_pitch_offset);
+                if (data.imu_roll_offset !== undefined) imuRollOffset = parseFloat(data.imu_roll_offset);
+                if (data.imu_heading_offset !== undefined) imuHeadingOffset = parseFloat(data.imu_heading_offset);
             } catch (error) {
                 console.error("Error fetching system settings:", error);
             }
         }
 
-        async function saveSystemSettings() {
+        // Fetch Tuner Settings from backend config
+        async function fetchTunerSettings() {
+            try {
+                const response = await fetch('/api/tuner');
+                const data = await response.json();
+                
+                tunerState = data;
+                
+                // Update SDR visualizer metadata overlays
+                safeSetText('sdr-center-val', (data.center_frequency_hz / 1e6).toFixed(3) + ' MHz');
+                safeSetText('sdr-span-val', (data.span_hz / 1e6).toFixed(3) + ' MHz');
+                safeSetText('sdr-gain-val', data.gain_db.toFixed(1) + ' dB');
+                safeSetText('sdr-squelch-val', data.squelch_level.toFixed(0));
+                
+                // Set form control values
+                const presetSelect = document.getElementById('tuner-preset-select');
+                if (presetSelect && data.preset) {
+                    presetSelect.value = data.preset;
+                }
+                const squelchSlider = document.getElementById('tuner-squelch-slider');
+                if (squelchSlider) {
+                    squelchSlider.value = data.squelch_level;
+                    safeSetText('tuner-squelch-val-label', data.squelch_level.toFixed(0));
+                }
+                const gainSlider = document.getElementById('tuner-gain-slider');
+                if (gainSlider) {
+                    gainSlider.value = data.gain_db;
+                    safeSetText('tuner-gain-val-label', data.gain_db.toFixed(1) + ' dB');
+                }
+                const centerInput = document.getElementById('tuner-center-input');
+                if (centerInput) {
+                    centerInput.value = (data.center_frequency_hz / 1e6).toFixed(3);
+                }
+                const spanSelect = document.getElementById('tuner-span-select');
+                if (spanSelect) {
+                    spanSelect.value = data.span_hz;
+                }
+                
+                // Update squelch label horizontal offset
+                updateSdrSquelchLabelPosition();
+            } catch (error) {
+                console.error("Error fetching tuner settings:", error);
+            }
+        }
+
+        function updateSdrSquelchLabelPosition() {
+            const labelEl = document.getElementById('sdr-squelch-label');
+            if (!labelEl) return;
+            
+            const fftHeight = 120; // Hardcoded FFT section height in px
+            const squelch = tunerState.squelch_level;
+            
+            // Map 0 to 300 squelch to Y coord
+            let pct = squelch / 300.0;
+            if (pct < 0) pct = 0;
+            if (pct > 1) pct = 1;
+            
+            const topY = fftHeight * (1 - pct);
+            labelEl.style.top = `${topY}px`;
+            labelEl.innerText = `Squelch Threshold: ${squelch}`;
+        }
+
+        async function applyPresetImmediately(preset) {
+            const msgEl = document.getElementById('settings-status-msg');
+            if (msgEl) {
+                msgEl.innerText = "Applying preset profile...";
+                msgEl.className = "text-[10px] text-center font-mono py-1 text-sky-400 animate-pulse";
+            }
+            try {
+                await fetch('/api/tuner', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ preset: preset })
+                });
+                // Immediately fetch updated backend settings to snap UI sliders to the proper defaults
+                await fetchTunerSettings();
+                
+                if (msgEl) {
+                    msgEl.innerText = "Preset profile applied.";
+                    msgEl.className = "text-[10px] text-center font-mono py-1 text-emerald-400";
+                    setTimeout(() => { if (msgEl.innerText === "Preset profile applied.") msgEl.innerText = ""; }, 3000);
+                }
+            } catch (error) {
+                console.error("Error applying preset:", error);
+            }
+        }
+
+        async function saveTunerSettings() {
             const val = document.getElementById('max-duration-slider').value;
-            const noaaChecked = document.getElementById('noaa-enabled-checkbox').checked;
-            const emergencyChecked = document.getElementById('emergency-enabled-checkbox').checked;
+            const preset = document.getElementById('tuner-preset-select').value;
+            const squelch = parseFloat(document.getElementById('tuner-squelch-slider').value);
+            const gain = parseFloat(document.getElementById('tuner-gain-slider').value);
+            const centerMHz = parseFloat(document.getElementById('tuner-center-input').value);
+            const span = parseInt(document.getElementById('tuner-span-select').value);
+            
             const msgEl = document.getElementById('settings-status-msg');
             if (msgEl) {
                 msgEl.innerText = "Applying changes...";
                 msgEl.className = "text-[10px] text-center font-mono py-1 text-sky-400 animate-pulse";
             }
+            
             try {
-                const response = await fetch('/api/settings', {
+                // 1. Save segment duration to settings API
+                await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        max_segment_duration_seconds: parseFloat(val),
-                        noaa_enabled: noaaChecked,
-                        emergency_enabled: emergencyChecked
+                    body: JSON.stringify({ max_segment_duration_seconds: parseFloat(val) })
+                });
+                
+                // 2. Save tuner parameters to tuner API (relocate center from MHz to Hz)
+                const centerHz = Math.round(centerMHz * 1e6);
+                const response = await fetch('/api/tuner', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        preset: preset,
+                        squelch_level: squelch,
+                        gain_db: gain,
+                        center_frequency_hz: centerHz,
+                        span_hz: span
                     })
                 });
+                
                 const data = await response.json();
                 if (data.status === 'success') {
                     if (msgEl) {
@@ -1331,9 +1795,10 @@
                             msgEl.innerText = "";
                         }, 3000);
                     }
-                    // Fetch transcripts and metrics immediately to reflect changes
+                    // Immediate refresh
                     fetchTranscripts();
                     fetchMetrics();
+                    fetchTunerSettings();
                 } else {
                     if (msgEl) {
                         msgEl.innerText = "Error: " + (data.error || "Failed to save settings");
@@ -1341,11 +1806,127 @@
                     }
                 }
             } catch (error) {
-                console.error("Error saving settings:", error);
+                console.error("Error saving tuner settings:", error);
                 if (msgEl) {
                     msgEl.innerText = "Failed to connect to server.";
                     msgEl.className = "text-[10px] text-center font-mono py-1 text-rose-450";
                 }
+            }
+        }
+
+        function showCustomModal(title, contentHtml, type = 'info') {
+            const modal = document.getElementById('custom-modal');
+            const card = document.getElementById('custom-modal-card');
+            const titleEl = document.getElementById('custom-modal-title');
+            const contentEl = document.getElementById('custom-modal-content');
+            const iconBg = document.getElementById('custom-modal-icon-bg');
+            const iconSvg = document.getElementById('custom-modal-icon');
+
+            titleEl.innerText = title;
+            contentEl.innerHTML = contentHtml;
+
+            // Reset dynamic classes
+            iconBg.className = 'p-2 rounded-xl border';
+            card.className = 'glass-card rounded-2xl p-6 max-w-sm w-full border shadow-2xl transform scale-95 transition-all duration-300';
+
+            if (type === 'success') {
+                iconBg.classList.add('bg-emerald-950/40', 'text-emerald-400', 'border-emerald-500/20');
+                card.classList.add('border-emerald-500/30');
+                iconSvg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>';
+            } else if (type === 'error') {
+                iconBg.classList.add('bg-rose-950/40', 'text-rose-400', 'border-rose-500/20');
+                card.classList.add('border-rose-500/30');
+                iconSvg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path>';
+            } else {
+                iconBg.classList.add('bg-sky-950/40', 'text-sky-400', 'border-sky-500/20');
+                card.classList.add('border-sky-500/30');
+                iconSvg.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+            }
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeCustomModal() {
+            const modal = document.getElementById('custom-modal');
+            const card = document.getElementById('custom-modal-card');
+            
+            card.classList.remove('scale-100');
+            card.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('opacity-0', 'pointer-events-none');
+            }, 150);
+        }
+
+        async function calibrateIMU() {
+            const btn = document.querySelector('button[onclick="calibrateIMU()"]');
+            const originalText = btn ? btn.innerText : "Calibrate Flat";
+            if (btn) btn.innerText = "Calibrating...";
+            try {
+                const response = await fetch('/api/calibrate_imu', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    imuPitchOffset = parseFloat(data.imu_pitch_offset);
+                    imuRollOffset = parseFloat(data.imu_roll_offset);
+                    imuHeadingOffset = parseFloat(data.imu_heading_offset);
+                    
+                    const modalContent = `
+                        <p class="text-slate-400 text-xs mb-4 font-sans">The physical mounting offsets have been saved successfully.</p>
+                        <div class="grid grid-cols-2 gap-2 text-center text-xs mt-2">
+                            <div class="bg-slate-900/60 border border-slate-800 p-2.5 rounded-xl">
+                                <span class="text-slate-500 block font-sans text-[10px] uppercase font-semibold">Pitch Offset</span>
+                                <span class="text-emerald-400 font-mono font-bold text-sm">${imuPitchOffset.toFixed(2)}°</span>
+                            </div>
+                            <div class="bg-slate-900/60 border border-slate-800 p-2.5 rounded-xl">
+                                <span class="text-slate-500 block font-sans text-[10px] uppercase font-semibold">Roll Offset</span>
+                                <span class="text-emerald-400 font-mono font-bold text-sm">${imuRollOffset.toFixed(2)}°</span>
+                            </div>
+                        </div>
+                    `;
+                    showCustomModal("IMU Calibrated", modalContent, "success");
+                } else {
+                    showCustomModal("Calibration Failed", `<p class="text-rose-400 font-sans text-xs">${data.error || "Unknown error"}</p>`, "error");
+                }
+            } catch (error) {
+                console.error("Error calibrating IMU:", error);
+                showCustomModal("Connection Error", '<p class="text-rose-400 font-sans text-xs">Failed to connect to server for IMU calibration.</p>', "error");
+            } finally {
+                if (btn) btn.innerText = originalText;
+            }
+        }
+
+        async function clearIMUCalibration() {
+            const btn = document.querySelector('button[onclick="clearIMUCalibration()"]');
+            const originalText = btn ? btn.innerText : "Reset";
+            if (btn) btn.innerText = "Resetting...";
+            try {
+                const response = await fetch('/api/calibrate_imu', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clear: true })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    imuPitchOffset = 0.0;
+                    imuRollOffset = 0.0;
+                    imuHeadingOffset = 0.0;
+                    showCustomModal("Calibration Reset", '<p class="text-slate-400 font-sans text-xs">IMU calibration reset to factory defaults successfully.</p>', "success");
+                } else {
+                    showCustomModal("Reset Failed", `<p class="text-rose-400 font-sans text-xs">${data.error || "Unknown error"}</p>`, "error");
+                }
+            } catch (error) {
+                console.error("Error clearing IMU calibration:", error);
+                showCustomModal("Connection Error", '<p class="text-rose-400 font-sans text-xs">Failed to connect to server for IMU reset.</p>', "error");
+            } finally {
+                if (btn) btn.innerText = originalText;
             }
         }
 
@@ -1358,11 +1939,317 @@
             updateSliderLabel(val);
         }
 
+        // ==========================================
+        // SDR SPECTRUM & WATERFALL VISUALIZER LAYER
+        // ==========================================
+        let canvas = null;
+        let ctxSdr = null;
+        let baselineNoise = [];
+        let fftBins = 512;
+        let waterfallBuffer = null;
+
+        function initSdrCanvas() {
+            canvas = document.getElementById('sdrCanvas');
+            if (!canvas) return;
+            ctxSdr = canvas.getContext('2d');
+            
+            resizeCanvas();
+            
+            // Pre-seed baseline noise floor arrays
+            baselineNoise = new Array(fftBins).fill(0).map(() => -82.0 + (Math.random() * 4.0));
+            
+            // Start visualization frame loop
+            requestAnimationFrame(animateSdr);
+        }
+
+        function resizeCanvas() {
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        // Approximate Jet palette matching standard SDR tool color grading
+        function getWaterfallColor(db) {
+            let v = (db - (-95)) / 65; // Normalize range: -95dB (dark background) to -30dB (white peak)
+            if (v < 0) v = 0;
+            if (v > 1) v = 1;
+            
+            let r = 0, g = 0, b = 0;
+            if (v < 0.2) {
+                // Navy low noise floor
+                b = Math.floor(v * 5 * 120);
+            } else if (v < 0.4) {
+                // Blue-Teal
+                let p = (v - 0.2) * 5;
+                g = Math.floor(p * 160);
+                b = 120 + Math.floor(p * 80);
+            } else if (v < 0.6) {
+                // Cyan-Green
+                let p = (v - 0.4) * 5;
+                r = Math.floor(p * 30);
+                g = 160 + Math.floor(p * 60);
+                b = 200 - Math.floor(p * 170);
+            } else if (v < 0.8) {
+                // Yellow-Orange
+                let p = (v - 0.6) * 5;
+                r = 30 + Math.floor(p * 210);
+                g = 220 - Math.floor(p * 70);
+                b = 30 - Math.floor(p * 30);
+            } else {
+                // Red-White peak strength signals
+                let p = (v - 0.8) * 5;
+                r = 240 + Math.floor(p * 15);
+                g = 150 + Math.floor(p * 105);
+                b = Math.floor(p * 255);
+            }
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function animateSdr() {
+            if (!canvas || !ctxSdr || activeView !== 'vhf') {
+                requestAnimationFrame(animateSdr);
+                return;
+            }
+
+            const width = canvas.width;
+            const height = canvas.height;
+
+            if (width === 0 || height === 0) {
+                requestAnimationFrame(animateSdr);
+                return;
+            }
+
+            const fftHeight = 120;
+            const bannerHeight = 18;
+            const waterfallScrollY = fftHeight + bannerHeight;
+            const waterfallScrollHeight = height - waterfallScrollY;
+
+            // 1. Shift Waterfall segment down 1px (scroll starts below frequency banner)
+            ctxSdr.drawImage(canvas, 0, waterfallScrollY, width, waterfallScrollHeight - 1, 0, waterfallScrollY + 1, width, waterfallScrollHeight - 1);
+
+            // 2. Generate current FFT values (Baseline + Active Peaks)
+            const currentFft = new Array(fftBins);
+            const centerFreq = tunerState.center_frequency_hz;
+            const span = tunerState.span_hz;
+            const minFreq = centerFreq - (span / 2);
+            const maxFreq = centerFreq + (span / 2);
+
+            // Decay active peaks towards baseline noise
+            Object.keys(sdrPeaks).forEach(f => {
+                const peak = sdrPeaks[f];
+                peak.current_power += (peak.target_power - peak.current_power) * 0.15;
+            });
+
+            // Fill current frame FFT array
+            for (let i = 0; i < fftBins; i++) {
+                // Smooth previous noise baseline with small random drift
+                baselineNoise[i] = baselineNoise[i] * 0.9 + (-82.0 + (Math.random() * 4.0)) * 0.1;
+                let val = baselineNoise[i];
+
+                // Calculate exact frequency corresponding to this bin
+                const binFreq = minFreq + (i / fftBins) * span;
+
+                // Superimpose active peak bell curves
+                Object.keys(sdrPeaks).forEach(f => {
+                    const peakFreq = parseFloat(f);
+                    const peak = sdrPeaks[peakFreq];
+                    if (peak && peak.current_power > -80.0) {
+                        // Distribute peak power using Gaussian bell distribution
+                        const widthHz = 15000; // 15 kHz narrow band FM bandwidth representation
+                        const offset = Math.abs(binFreq - peakFreq);
+                        const exponent = -Math.pow(offset / widthHz, 2) / 2;
+                        const addition = (peak.current_power - (-82.0)) * Math.exp(exponent);
+                        if (addition > 0) {
+                            val += addition;
+                        }
+                    }
+                });
+
+
+
+                currentFft[i] = val;
+            }
+
+            // 3. Clear FFT spectrum viewport
+            ctxSdr.fillStyle = '#090d16';
+            ctxSdr.fillRect(0, 0, width, fftHeight);
+
+            // Draw FFT gridlines
+            ctxSdr.strokeStyle = 'rgba(51, 65, 85, 0.25)';
+            ctxSdr.lineWidth = 1;
+            
+            // Vertical grids matching active frequencies
+            tunerState.frequencies.forEach(f => {
+                const freq = f.frequency_hz;
+                if (freq >= minFreq && freq <= maxFreq) {
+                    const pct = (freq - minFreq) / span;
+                    const gridX = pct * width;
+                    
+                    ctxSdr.beginPath();
+                    ctxSdr.moveTo(gridX, 0);
+                    ctxSdr.lineTo(gridX, fftHeight);
+                    ctxSdr.stroke();
+                    
+                    // Draw small labeled flag
+                    ctxSdr.fillStyle = '#475569';
+                    ctxSdr.font = '9px Outfit';
+                    ctxSdr.fillText(f.name, gridX + 4, 15);
+                }
+            });
+
+            // Horizontal power gridlines (dBs)
+            ctxSdr.strokeStyle = 'rgba(51, 65, 85, 0.15)';
+            for (let db = -90; db <= -30; db += 10) {
+                const pct = (db - (-95)) / 65;
+                const gridY = fftHeight * (1 - pct);
+                ctxSdr.beginPath();
+                ctxSdr.moveTo(0, gridY);
+                ctxSdr.lineTo(width, gridY);
+                ctxSdr.stroke();
+                
+                ctxSdr.fillStyle = '#334155';
+                ctxSdr.font = '8px Outfit';
+                ctxSdr.fillText(db + ' dB', 5, gridY - 2);
+            }
+
+            // 4. Draw FFT Line Graph
+            ctxSdr.beginPath();
+            ctxSdr.lineWidth = 1.5;
+            ctxSdr.strokeStyle = '#38bdf8'; // Vibrant blue spectrum line
+            
+            // Dynamic gradient fill under the FFT line
+            const fillGrad = ctxSdr.createLinearGradient(0, 0, 0, fftHeight);
+            fillGrad.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+            fillGrad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+            
+            for (let i = 0; i < width; i++) {
+                // Map screen pixel index to FFT bin index
+                const binIdx = Math.floor((i / width) * fftBins);
+                const db = currentFft[binIdx];
+                const pct = (db - (-95)) / 65;
+                const y = fftHeight * (1 - pct);
+                
+                if (i === 0) {
+                    ctxSdr.moveTo(i, y);
+                } else {
+                    ctxSdr.lineTo(i, y);
+                }
+            }
+            ctxSdr.stroke();
+            
+            // Draw gradient fill
+            ctxSdr.lineTo(width, fftHeight);
+            ctxSdr.lineTo(0, fftHeight);
+            ctxSdr.fillStyle = fillGrad;
+            ctxSdr.fill();
+
+            // 5. Draw Squelch Threshold Line in FFT section
+            const squelchPct = tunerState.squelch_level / 300.0;
+            const squelchY = fftHeight * (1 - squelchPct);
+            ctxSdr.strokeStyle = 'rgba(244, 63, 94, 0.45)'; // Soft rose dashed squelch line
+            ctxSdr.lineWidth = 1;
+            ctxSdr.setLineDash([4, 4]);
+            ctxSdr.beginPath();
+            ctxSdr.moveTo(0, squelchY);
+            ctxSdr.lineTo(width, squelchY);
+            ctxSdr.stroke();
+            ctxSdr.setLineDash([]); // Reset line dash
+
+            // 6. Draw new line of Waterfall pixels (Y = waterfallScrollY, just below the banner)
+            const imgData = ctxSdr.createImageData(width, 1);
+            for (let i = 0; i < width; i++) {
+                const binIdx = Math.floor((i / width) * fftBins);
+                const db = currentFft[binIdx];
+                const colorStr = getWaterfallColor(db);
+                // Parse color string rgb(r,g,b)
+                const colors = colorStr.match(/\d+/g).map(Number);
+                
+                const idx = i * 4;
+                imgData.data[idx] = colors[0];     // R
+                imgData.data[idx + 1] = colors[1]; // G
+                imgData.data[idx + 2] = colors[2]; // B
+                imgData.data[idx + 3] = 255;       // A (opacity)
+            }
+            ctxSdr.putImageData(imgData, 0, waterfallScrollY);
+
+            // 7. Draw horizontal frequency axis text banner (border between FFT and Waterfall)
+            ctxSdr.fillStyle = '#0f172a';
+            ctxSdr.fillRect(0, fftHeight, width, 18);
+            
+            ctxSdr.strokeStyle = '#1e293b';
+            ctxSdr.lineWidth = 1;
+            ctxSdr.beginPath();
+            ctxSdr.moveTo(0, fftHeight);
+            ctxSdr.lineTo(width, fftHeight);
+            ctxSdr.moveTo(0, fftHeight + 18);
+            ctxSdr.lineTo(width, fftHeight + 18);
+            ctxSdr.stroke();
+
+            // Label frequency bounds on the banner
+            ctxSdr.fillStyle = '#64748b';
+            ctxSdr.font = '9px Outfit';
+            
+            // Left frequency limit
+            ctxSdr.fillText((minFreq / 1e6).toFixed(3) + ' MHz', 10, fftHeight + 12);
+            // Center frequency
+            const centerText = (centerFreq / 1e6).toFixed(3) + ' MHz';
+            const centerWidth = ctxSdr.measureText(centerText).width;
+            ctxSdr.fillText(centerText, (width - centerWidth) / 2, fftHeight + 12);
+            // Right frequency limit
+            const rightText = (maxFreq / 1e6).toFixed(3) + ' MHz';
+            const rightWidth = ctxSdr.measureText(rightText).width;
+            ctxSdr.fillText(rightText, width - rightWidth - 10, fftHeight + 12);
+
+            requestAnimationFrame(animateSdr);
+        }
+
+        // Initialize and coordinate loops
+        function runMainLoops() {
+            // Load Telemetry rate from localStorage cache on boot
+            document.getElementById('telemetry-rate-slider').value = telemetryIntervalSeconds;
+            updateTelemetrySliderLabel(telemetryIntervalSeconds);
+            
+            setupTelemetryTimer();
+            initSdrCanvas();
+            
+            // Tuner Settings sync loop (every 10s)
+            fetchTunerSettings();
+            tunerTimer = setInterval(fetchTunerSettings, 10000);
+            
+            // VHF dashboard loops (fetch every 10s)
+            fetchTranscripts();
+            fetchMetrics();
+            transcriptsTimer = setInterval(fetchTranscripts, 10000);
+            metricsTimer = setInterval(fetchMetrics, 10000);
+
+            // System services log loops (every 5s)
+            fetchServiceLogs();
+            logsTimer = setInterval(fetchServiceLogs, 5000);
+            
+            // Load configs settings values into panel controls
+            fetchSystemSettings();
+        }
+
         runMainLoops();
-        setInterval(fetchData, 15000);
-        setInterval(fetchTranscripts, 10000);
-        setInterval(fetchMetrics, 10000);
-        setInterval(fetchServiceLogs, 5000);
     </script>
+
+    <!-- Custom Modal Dialog -->
+    <div id="custom-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm opacity-0 pointer-events-none transition-all duration-300">
+        <div id="custom-modal-card" class="glass-card rounded-2xl p-6 max-w-sm w-full border border-slate-800 shadow-2xl transform scale-95 transition-all duration-300">
+            <div class="flex items-center gap-3 mb-4">
+                <div id="custom-modal-icon-bg" class="p-2 rounded-xl">
+                    <svg id="custom-modal-icon" class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"></svg>
+                </div>
+                <h3 id="custom-modal-title" class="text-lg font-bold tracking-tight text-white"></h3>
+            </div>
+            <div id="custom-modal-content" class="text-sm text-slate-300 mb-6"></div>
+            <div class="flex justify-end">
+                <button onclick="closeCustomModal()" class="px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
