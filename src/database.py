@@ -172,6 +172,23 @@ class HybridStore:
         # Build search optimization indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_time ON vhf_transcripts(timestamp);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_trans_chan ON vhf_transcripts(channel_name);")
+        
+        # Build power-aware queue table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transcription_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                audio_path TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                channel_name TEXT NOT NULL,
+                frequency_hz INTEGER NOT NULL,
+                duration_seconds REAL NOT NULL,
+                snr_db REAL NOT NULL,
+                hardware_node TEXT NOT NULL,
+                sdr_device TEXT NOT NULL,
+                status TEXT NOT NULL
+            );
+        """)
+        
         self.sqlite_conn.commit()
         self.logger.info("SQLite storage schema initialized successfully.")
 
@@ -459,6 +476,144 @@ class HybridStore:
         except Exception as e:
             self.logger.error(f"Failed to write setting {key}={value}: {e}")
             return False
+
+    def enqueue_audio(self, segment_info, channel_name, hardware_node, sdr_device):
+        """Add an audio segment to the queue for deferred transcription."""
+        cursor = self.sqlite_conn.cursor()
+        cursor.execute("""
+            INSERT INTO transcription_queue (
+                audio_path, timestamp, channel_name, frequency_hz, 
+                duration_seconds, snr_db, hardware_node, sdr_device, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            segment_info.get("audio_path", ""),
+            segment_info.get("timestamp", ""),
+            channel_name,
+            segment_info.get("frequency_hz", 0),
+            segment_info.get("duration_seconds", 0.0),
+            segment_info.get("snr_db", 0.0),
+            hardware_node,
+            sdr_device,
+            "PENDING"
+        ))
+        self.sqlite_conn.commit()
+        return cursor.lastrowid
+
+    def get_next_pending_audio(self):
+        """Retrieve the oldest pending audio segment from the queue."""
+        cursor = self.sqlite_conn.cursor()
+        cursor.execute("""
+            SELECT id, audio_path, timestamp, channel_name, frequency_hz, 
+                   duration_seconds, snr_db, hardware_node, sdr_device
+            FROM transcription_queue
+            WHERE status = 'PENDING'
+            ORDER BY id ASC LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            # Mark as PROCESSING to prevent duplicate handling
+            cursor.execute("UPDATE transcription_queue SET status = 'PROCESSING' WHERE id = ?", (row[0],))
+            self.sqlite_conn.commit()
+            return {
+                "id": row[0],
+                "audio_path": row[1],
+                "timestamp": row[2],
+                "channel_name": row[3],
+                "frequency_hz": row[4],
+                "duration_seconds": row[5],
+                "snr_db": row[6],
+                "hardware_node": row[7],
+                "sdr_device": row[8]
+            }
+        return None
+
+    def mark_audio_processed(self, queue_id):
+        cursor = self.sqlite_conn.cursor()
+        cursor.execute("UPDATE transcription_queue SET status = 'COMPLETED' WHERE id = ?", (queue_id,))
+        self.sqlite_conn.commit()
+
+    def mark_audio_failed(self, queue_id):
+        cursor = self.sqlite_conn.cursor()
+        cursor.execute("UPDATE transcription_queue SET status = 'FAILED' WHERE id = ?", (queue_id,))
+        self.sqlite_conn.commit()
+
+    def _parse_iso_timestamp(self, ts_str):
+        """Parse an ISO 8601 timestamp string robustly."""
+        if ts_str.endswith('Z'):
+            ts_str = ts_str[:-1] + '+00:00'
+        try:
+            dt = datetime.fromisoformat(ts_str)
+        except ValueError:
+            try:
+                dt = datetime.strptime(ts_str[:19], "%Y-%m-%dT%H:%M:%S")
+            except Exception as e:
+                self.logger.error(f"Failed to parse timestamp {ts_str}: {e}")
+                return None
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+
+    def get_histogram_data(self, duration="1d", channel_name=None):
+        """Retrieve timeseries histogram data for call counts."""
+        now = datetime.now()
+        
+        if duration == "1d":
+            bucket_hours = 1
+            num_buckets = 24
+            cutoff = now - timedelta(days=1)
+            label_fmt = "%H:00"
+        elif duration == "5d":
+            bucket_hours = 6
+            num_buckets = 20
+            cutoff = now - timedelta(days=5)
+            label_fmt = "%m/%d %H:00"
+        elif duration == "7d":
+            bucket_hours = 24
+            num_buckets = 7
+            cutoff = now - timedelta(days=7)
+            label_fmt = "%b %d"
+        else:
+            bucket_hours = 1
+            num_buckets = 24
+            cutoff = now - timedelta(days=1)
+            label_fmt = "%H:00"
+            
+        cursor = self.sqlite_conn.cursor()
+        conditions = ["timestamp >= ?"]
+        params = [cutoff.isoformat()]
+        
+        if channel_name and channel_name != 'all':
+            conditions.append("channel_name = ?")
+            params.append(channel_name)
+            
+        where_clause = "WHERE " + " AND ".join(conditions)
+        sql = f"SELECT timestamp FROM vhf_transcripts {where_clause} ORDER BY timestamp ASC"
+        
+        cursor.execute(sql, tuple(params))
+        rows = cursor.fetchall()
+        
+        bucket_seconds = bucket_hours * 3600
+        counts = [0] * num_buckets
+        labels = []
+        
+        for i in range(num_buckets):
+            bucket_start = cutoff + i * timedelta(hours=bucket_hours)
+            labels.append(bucket_start.strftime(label_fmt))
+            
+        for (ts_str,) in rows:
+            dt = self._parse_iso_timestamp(ts_str)
+            if not dt:
+                continue
+                
+            offset_seconds = (dt - cutoff).total_seconds()
+            bucket_idx = int(offset_seconds // bucket_seconds)
+            if 0 <= bucket_idx < num_buckets:
+                counts[bucket_idx] += 1
+                
+        return {
+            "labels": labels,
+            "counts": counts
+        }
 
     def close(self):
         """Close outstanding connections."""
