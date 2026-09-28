@@ -6,6 +6,8 @@ import time
 import signal
 import logging
 import argparse
+import threading
+import glob
 from datetime import datetime
 
 # Local module imports
@@ -30,6 +32,78 @@ class VhfTranscriberDaemon:
         self.db_store = None
         
         self.last_prune_time = 0
+        self.transcription_thread = None
+
+    def _get_current_power_state(self):
+        """Read the latest Victron telemetry from sensor logs to determine power state."""
+        log_dir = self.config.get("database", {}).get("audio_storage_dir", "logs/audio").replace("audio", "")
+        log_files = sorted(glob.glob(os.path.join(log_dir, "sensor_data_*.log")))
+        if not log_files:
+            return 13.0, 10.0  # Safe defaults if no telemetry exists
+
+        try:
+            with open(log_files[-1], "r") as f:
+                lines = f.readlines()
+                if lines:
+                    last_record = json.loads(lines[-1])
+                    sensors = last_record.get("sensors", {})
+                    vedirect = sensors.get("vedirect", {})
+                    if vedirect:
+                        voltage_v = float(vedirect.get("V", 0)) / 1000.0
+                        power_w = float(vedirect.get("PPV", 0))
+                        return voltage_v, power_w
+        except Exception as e:
+            self.logger.error(f"Error reading power telemetry: {e}")
+            
+        return 13.0, 10.0
+
+    def _transcription_worker_loop(self):
+        """Background thread that consumes the transcription queue when power allows."""
+        self.logger.info("Transcription worker thread started.")
+        while self.running:
+            try:
+                # Check power state
+                voltage_v, power_w = self._get_current_power_state()
+                
+                # Power Logic: Need > 12.4V OR (12.0V + 10W Solar)
+                if voltage_v > 12.4 or (voltage_v > 12.0 and power_w > 10.0):
+                    item = self.db_store.get_next_pending_audio()
+                    if item:
+                        self.logger.info(f"[Power OK: {voltage_v:.2f}V {power_w:.1f}W] Transcribing queue item {item['id']}")
+                        try:
+                            text, confidence = self.transcriber.transcribe_segment(item["audio_path"])
+                            clean_text = text.strip()
+                            self.logger.info(f"Transcription Text: \"{clean_text}\" (Confidence={confidence:.2f})")
+                            
+                            # Construct full database record
+                            db_record = {
+                                "timestamp": item["timestamp"],
+                                "channel_name": item["channel_name"],
+                                "frequency_hz": item["frequency_hz"],
+                                "duration_seconds": item["duration_seconds"],
+                                "audio_path": item["audio_path"],
+                                "transcript_text": clean_text,
+                                "confidence_score": confidence,
+                                "snr_db": item["snr_db"],
+                                "hardware_node": item["hardware_node"],
+                                "sdr_device": item["sdr_device"]
+                            }
+                            
+                            # Index record in both SQLite WAL and LanceDB Vector database
+                            self.db_store.insert_transcript(db_record)
+                            self.db_store.mark_audio_processed(item["id"])
+                        except Exception as e:
+                            self.logger.error(f"Error transcribing queue item {item['id']}: {e}")
+                            self.db_store.mark_audio_failed(item["id"])
+                    else:
+                        time.sleep(1.0)
+                else:
+                    # Low power mode
+                    time.sleep(5.0)
+            except Exception as e:
+                self.logger.error(f"Transcription worker error: {e}")
+                time.sleep(2.0)
+        self.logger.info("Transcription worker thread stopped.")
 
     def load_configuration(self):
         """Load JSON settings from the configuration directory."""
@@ -46,12 +120,19 @@ class VhfTranscriberDaemon:
             sys.exit(1)
 
     def get_target_frequencies(self):
-        """Build the target frequency list from config, applying noaa_enabled and emergency_enabled filters."""
+        """Build the target frequency list from config, applying noaa_enabled, emergency_enabled, and fm_radio_enabled filters."""
         noaa_val = self.db_store.get_setting("noaa_enabled", default="1")
         noaa_enabled = (noaa_val == "1")
         emergency_val = self.db_store.get_setting("emergency_enabled", default="1")
         emergency_enabled = (emergency_val == "1")
+        fm_val = self.db_store.get_setting("fm_radio_enabled", default="0")
+        fm_enabled = (fm_val == "1")
         
+        if noaa_enabled:
+            return [162550000]
+        if fm_enabled:
+            return [98100000]
+            
         target = []
         for f in self.config.get("scan_frequencies", []):
             freq = f["frequency_hz"]
@@ -156,6 +237,10 @@ class VhfTranscriberDaemon:
         self.running = True
         self.logger.info("Starting Marine VHF Transcription Service Daemon.")
         
+        # Start Background Transcription Worker
+        self.transcription_thread = threading.Thread(target=self._transcription_worker_loop, daemon=True)
+        self.transcription_thread.start()
+        
         # Start SDR Hardware Capture
         self.sdr_receiver.start_capture(self.audio_queue)
         self.last_prune_time = time.time()
@@ -235,17 +320,7 @@ class VhfTranscriberDaemon:
             if segment_info:
                 try:
                     # Squelch close and audio save complete
-                    self.logger.info(f"Processing new audio segment: {segment_info['audio_path']}")
-                    
-                    # Run speech recognition on the WAV segment
-                    text, confidence = self.transcriber.transcribe_segment(segment_info["audio_path"])
-                    
-                    # Clean up trailing spaces or punctuation
-                    clean_text = text.strip()
-                    self.logger.info(f"Transcription Text: \"{clean_text}\" (Confidence={confidence:.2f})")
-                    
-                    noaa_val = self.db_store.get_setting("noaa_enabled", default="1")
-                    noaa_enabled = (noaa_val == "1")
+                    self.logger.info(f"Enqueuing new audio segment: {segment_info['audio_path']}")
                     
                     # Determine frequency from true hardware provenance
                     frequency_hz = segment_info.get("frequency_hz")
@@ -264,25 +339,11 @@ class VhfTranscriberDaemon:
                     if channel_name == "Unknown":
                         channel_name = f"Unknown-{(frequency_hz / 1000000):.3f}M"
 
-                    # Construct full database record
-                    db_record = {
-                        "timestamp": segment_info["timestamp"],
-                        "channel_name": channel_name,
-                        "frequency_hz": frequency_hz,
-                        "duration_seconds": segment_info["duration_seconds"],
-                        "audio_path": segment_info["audio_path"],
-                        "transcript_text": clean_text,
-                        "confidence_score": confidence,
-                        "snr_db": segment_info["snr_db"],
-                        "hardware_node": "lhznbuoy",
-                        "sdr_device": sdr_device_type
-                    }
-                    
-                    # Index record in both SQLite WAL and LanceDB Vector database
-                    self.db_store.insert_transcript(db_record)
+                    # Add to transcription queue
+                    self.db_store.enqueue_audio(segment_info, channel_name, "lhznbuoy", sdr_device_type)
                     
                 except Exception as e:
-                    self.logger.error(f"Error in transcription pipeline processing: {e}")
+                    self.logger.error(f"Error enqueuing segment: {e}")
                 
             self._run_periodic_tasks(retention_days)
 
