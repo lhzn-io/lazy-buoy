@@ -365,7 +365,7 @@ class RtlAirbandReceiver(SdrReceiver):
                 {"freq": 156.475, "name": "Marine-69"},
                 {"freq": 156.425, "name": "Marine-68"},
                 {"freq": 156.450, "name": "Marine-9"},
-                {"freq": 156.675, "name": "Marine-72"},
+                {"freq": 156.625, "name": "Marine-72"},
                 {"freq": 157.300, "name": "Marine-26TX"}
             ]
             channel_blocks = []
