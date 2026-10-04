@@ -33,6 +33,7 @@ class VhfTranscriberDaemon:
         
         self.last_prune_time = 0
         self.transcription_thread = None
+        self.exit_code = 0
 
     def _get_current_power_state(self):
         """Read the latest Victron telemetry from sensor logs to determine power state."""
@@ -253,6 +254,8 @@ class VhfTranscriberDaemon:
         while self.running:
             if hasattr(self.sdr_receiver, "running") and not self.sdr_receiver.running:
                 self.logger.error("SDR receiver capture thread stopped running. Shutting down daemon.")
+                # Non-zero exit so systemd records a failure and Restart= brings capture back
+                self.exit_code = 1
                 self.running = False
                 break
                 
@@ -365,6 +368,17 @@ class VhfTranscriberDaemon:
         self.logger.info("Halting active services and closing hardware channels...")
         if self.sdr_receiver:
             self.sdr_receiver.stop_capture()
+        # Let an in-flight transcription finish before releasing the pipeline under it
+        if self.transcription_thread and self.transcription_thread.is_alive():
+            self.transcription_thread.join(timeout=15.0)
+        # The Hailo pipeline runs a non-daemon thread that otherwise keeps the process
+        # alive until systemd's stop timeout. Close it, but never wait more than 10 s.
+        if self.transcriber:
+            closer = threading.Thread(target=self.transcriber.close, daemon=True)
+            closer.start()
+            closer.join(timeout=10.0)
+            if closer.is_alive():
+                self.logger.warning("Transcriber close() did not return within 10 s; forcing exit.")
         if self.db_store:
             self.db_store.close()
         self.logger.info("VHF Transcription Service stopped cleanly.")
@@ -396,3 +410,8 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, daemon.handle_signals)
 
     daemon.run()
+
+    # Exit even if a vendor library left a non-daemon thread running; cleanup()
+    # has already closed the SDR, transcriber, and databases.
+    logging.shutdown()
+    os._exit(daemon.exit_code)
