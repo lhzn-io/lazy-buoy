@@ -25,6 +25,7 @@ import adafruit_rfm9x
 
 from vedirect.vedirect import Vedirect
 from sensor_data_packet import SensorDataPacket
+from victron_hex import VictronHex
 
 # --- Sensor Setup ---
 
@@ -389,20 +390,25 @@ RTC_WAKEALARM = "/sys/class/rtc/rtc0/wakealarm"
 
 
 class LowVoltageGuard:
-    """Halt the node on sustained low battery voltage, with an RTC wake-up.
+    """Halt the node on sustained low battery voltage and arrange a restart.
 
     A halted Pi 5 stays off until power is cycled, and after the load drops the
     battery recovers above the Victron load-disconnect point, so nothing cycles
-    it. Arming the RTC wake alarm before halting turns the shutdown into a
-    timed sleep: on wake the daemon re-checks voltage and halts again if needed.
+    it. Two restart paths are armed before halting:
+      * primary: victron_trip raises the MPPT load-disconnect level above the
+        present voltage, so the controller removes power after the halt and
+        restores it (booting the Pi) once solar lifts the battery past the
+        reconnect level;
+      * fallback: the RTC wake alarm, in case the controller is unreachable.
     """
 
-    def __init__(self, threshold_v, required_count, wake_after_s, logger, file_logger):
+    def __init__(self, threshold_v, required_count, wake_after_s, logger, file_logger, victron_trip=None):
         self.threshold_v = threshold_v
         self.required_count = required_count
         self.wake_after_s = wake_after_s
         self.logger = logger
         self.file_logger = file_logger
+        self.victron_trip = victron_trip  # callable(voltage) -> bool, set once the MPPT is found
         self.low_count = 0
 
     def check(self, ve_data):
@@ -462,10 +468,22 @@ class LowVoltageGuard:
                 'event': 'shutdown',
                 'reason': reason,
                 'wake_after_s': self.wake_after_s if armed else None,
+                'victron_trip': self.victron_trip is not None,
             }))
         except Exception as e:
             self.logger.error(f"File log error during shutdown: {type(e).__name__} - {e}")
         os.sync()
+        # Last step before halting: the controller may cut power within seconds
+        if self.victron_trip is not None:
+            try:
+                tripped = self.victron_trip(voltage)
+            except Exception as e:
+                tripped = False
+                self.logger.error(f"Victron load trip failed: {type(e).__name__} - {e}")
+            self.logger.critical(
+                "Victron load disconnect tripped; power returns at reconnect level."
+                if tripped else "Victron load trip not confirmed; relying on RTC wake."
+            )
         os.system('sudo shutdown -h now')
         time.sleep(60)  # shutdown stops this service; never resume the loop
 
@@ -479,7 +497,13 @@ def main():
     parser.add_argument("-v", "--voltage-threshold", type=float, default=5.1, help="Low voltage shutdown threshold (V), default 5.1V")
     parser.add_argument("--low-voltage-count", type=int, default=3, help="Consecutive low readings required before halting, default 3")
     parser.add_argument("--wake-after", type=int, default=3600, help="Seconds until the RTC wakes the node after a low-voltage halt; 0 disables, default 3600")
+    parser.add_argument("--no-victron-control", action="store_true", help="Do not write Victron load-output settings")
+    parser.add_argument("--backstop-voltage", type=float, default=11.6, help="Victron load disconnect level while running (V), default 11.6")
+    parser.add_argument("--reconnect-voltage", type=float, default=13.4, help="Victron load reconnect level, i.e. solar wake (V), default 13.4")
+    parser.add_argument("--trip-margin", type=float, default=0.3, help="Disconnect level is set this far above the present voltage to cut power after a halt (V), default 0.3")
     args = parser.parse_args()
+    if not args.backstop_voltage < args.voltage_threshold < args.reconnect_voltage:
+        parser.error("require --backstop-voltage < --voltage-threshold < --reconnect-voltage")
 
     # Set root logger to INFO, only our module to DEBUG if requested
     logging.basicConfig(level=logging.INFO)
@@ -546,6 +570,20 @@ def main():
                 continue
             else:
                 logger.info(f"Found VE.Direct device: {ve_device}")
+        if voltage_guard.victron_trip is None and not args.no_victron_control:
+            # Once per boot: restore the running backstop (also undoes a sleep trip)
+            victron = VictronHex(ve_device, logger)
+            if victron.apply_load_backstop(args.backstop_voltage, args.reconnect_voltage):
+                logger.info(
+                    f"Victron load backstop set: disconnect {args.backstop_voltage} V, "
+                    f"reconnect {args.reconnect_voltage} V."
+                )
+            else:
+                logger.error("Victron load backstop not confirmed; will still try the sleep trip.")
+            trip_ceiling = args.reconnect_voltage - 0.5
+            voltage_guard.victron_trip = lambda v, vh=victron: vh.trip_load_disconnect(
+                min(v + args.trip_margin, trip_ceiling)
+            )
         ve = Vedirect(port=ve_device, timeout=5)
         logger.debug("Reading Victron MPPT metrics...")
         try:
