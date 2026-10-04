@@ -381,6 +381,95 @@ def find_devices(timeout=5, logger=None, find_vedirect=True, find_gps=True, slee
             logger.error("No GPS device found on USB/ACM ports")
     return vedirect_dev, gps_dev
 
+
+# A 12 V pack can never really read below this; the MPPT itself browns out first.
+# Anything lower is a corrupt or partial VE.Direct frame, not a battery reading.
+MIN_PLAUSIBLE_BATTERY_V = 6.0
+RTC_WAKEALARM = "/sys/class/rtc/rtc0/wakealarm"
+
+
+class LowVoltageGuard:
+    """Halt the node on sustained low battery voltage, with an RTC wake-up.
+
+    A halted Pi 5 stays off until power is cycled, and after the load drops the
+    battery recovers above the Victron load-disconnect point, so nothing cycles
+    it. Arming the RTC wake alarm before halting turns the shutdown into a
+    timed sleep: on wake the daemon re-checks voltage and halts again if needed.
+    """
+
+    def __init__(self, threshold_v, required_count, wake_after_s, logger, file_logger):
+        self.threshold_v = threshold_v
+        self.required_count = required_count
+        self.wake_after_s = wake_after_s
+        self.logger = logger
+        self.file_logger = file_logger
+        self.low_count = 0
+
+    def check(self, ve_data):
+        """Return the battery voltage in V, or None if the frame has no valid reading."""
+        raw = ve_data.get('V') if ve_data else None
+        if raw is None:
+            self.logger.warning("VE.Direct frame has no battery voltage field; skipping low-voltage check.")
+            return None
+        try:
+            voltage = float(raw) / 1000.0  # VE.Direct reports millivolts
+        except (TypeError, ValueError):
+            self.logger.warning(f"Unparseable VE.Direct battery voltage {raw!r}; skipping low-voltage check.")
+            return None
+        if voltage < MIN_PLAUSIBLE_BATTERY_V:
+            self.logger.warning(f"Implausible battery voltage {voltage:.2f} V; treating as a bad frame.")
+            return None
+
+        self.logger.debug(f"Battery voltage: {voltage:.2f} V")
+        if voltage >= self.threshold_v:
+            self.low_count = 0
+            return voltage
+
+        self.low_count += 1
+        self.logger.warning(
+            f"Battery voltage {voltage:.2f} V below threshold ({self.threshold_v} V), "
+            f"reading {self.low_count}/{self.required_count}."
+        )
+        if self.low_count >= self.required_count:
+            self._halt(voltage)
+        return voltage
+
+    def _arm_wake_alarm(self):
+        if self.wake_after_s <= 0:
+            return False
+        try:
+            # A pending alarm makes the write fail with EBUSY, so clear it first
+            with open(RTC_WAKEALARM, "w") as f:
+                f.write("0")
+            with open(RTC_WAKEALARM, "w") as f:
+                f.write(f"+{int(self.wake_after_s)}")
+            return True
+        except OSError as e:
+            self.logger.error(f"Could not arm RTC wake alarm: {type(e).__name__} - {e}")
+            return False
+
+    def _halt(self, voltage):
+        armed = self._arm_wake_alarm()
+        reason = (
+            f"Battery voltage {voltage:.2f} V below threshold ({self.threshold_v} V) "
+            f"for {self.low_count} consecutive readings"
+        )
+        wake_note = f"RTC wake in {self.wake_after_s} s" if armed else "no RTC wake armed"
+        self.logger.critical(f"{reason}. Halting; {wake_note}.")
+        try:
+            self.file_logger.info(json.dumps({
+                'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                'event': 'shutdown',
+                'reason': reason,
+                'wake_after_s': self.wake_after_s if armed else None,
+            }))
+        except Exception as e:
+            self.logger.error(f"File log error during shutdown: {type(e).__name__} - {e}")
+        os.sync()
+        os.system('sudo shutdown -h now')
+        time.sleep(60)  # shutdown stops this service; never resume the loop
+
+
 def main():
 
     parser = argparse.ArgumentParser(description="Sensor LoRa Daemon")
@@ -388,6 +477,8 @@ def main():
     parser.add_argument("-l", "--logdir", default="./logs", help="Directory for sensor data logs")
     parser.add_argument("-i", "--interval", type=int, default=300, help="Interval between packets in seconds")
     parser.add_argument("-v", "--voltage-threshold", type=float, default=5.1, help="Low voltage shutdown threshold (V), default 5.1V")
+    parser.add_argument("--low-voltage-count", type=int, default=3, help="Consecutive low readings required before halting, default 3")
+    parser.add_argument("--wake-after", type=int, default=3600, help="Seconds until the RTC wakes the node after a low-voltage halt; 0 disables, default 3600")
     args = parser.parse_args()
 
     # Set root logger to INFO, only our module to DEBUG if requested
@@ -440,6 +531,10 @@ def main():
         logger.error(f"Failed to initialize RFM9x LoRa radio: {type(e).__name__} - {e}")
         rfm9x = None
 
+    voltage_guard = LowVoltageGuard(
+        args.voltage_threshold, args.low_voltage_count, args.wake_after, logger, file_logger
+    )
+
     # VE.Direct initialization
     error_count = 0
     while True:
@@ -465,31 +560,9 @@ def main():
                 error_count = 0
             ve_data = None  # Skip this sensor for this packet
 
-        # Check battery voltage and shut down if below threshold
-        battery_voltage = None
+        # Check battery voltage; halts (with RTC wake) only on sustained valid low readings
         if ve_data is not None:
-            try:
-                # VE.Direct returns voltage in millivolts
-                battery_voltage = float(ve_data.get('V', 0)) / 1000.0
-                logger.debug(f"Battery voltage: {battery_voltage:.2f} V")
-                if battery_voltage < args.voltage_threshold:
-                    logger.critical(f"Battery voltage {battery_voltage:.2f} V below threshold ({args.voltage_threshold} V). Initiating shutdown.")
-                    # Log shutdown event
-                    try:
-                        shutdown_record = {
-                            'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                            'event': 'shutdown',
-                            'reason': f'Battery voltage {battery_voltage:.2f} V below threshold ({args.voltage_threshold} V)'
-                        }
-                        file_logger.info(json.dumps(shutdown_record))
-                    except Exception as e:
-                        logger.error(f"File log error during shutdown: {type(e).__name__} - {e}")
-                    # Attempt graceful shutdown
-                    os.system('sudo shutdown -h now')
-                    time.sleep(60)  # Prevent further loop iterations
-                    break
-            except Exception as e:
-                logger.error(f"Error parsing battery voltage: {type(e).__name__} - {e}")
+            voltage_guard.check(ve_data)
 
         gps_data = get_gps_data(gps)
         bno_data = get_bno08x_data()
