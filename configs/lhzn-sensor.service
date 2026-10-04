@@ -9,7 +9,7 @@ User=root
 WorkingDirectory=/home/pi/Projects/lhzn-io/lazy-buoy/src
 
 # Use the full path to the conda environment's python
-ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/sensor_lora_daemon.py -i 15 -v 11.5 --debug
+ExecStart=/home/pi/Projects/lhzn-io/lazy-buoy/.venv/bin/python /home/pi/Projects/lhzn-io/lazy-buoy/src/sensor_lora_daemon.py -i 15 -v 12.0 --debug -l /home/pi/Projects/lhzn-io/lazy-buoy/logs
 
 # Restart automatically if it crashes
 Restart=always
