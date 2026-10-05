@@ -47,3 +47,9 @@ configs/rtl_airband.conf
 # Config snapshots and throwaway probes
 *.bak
 scratch/
+
+# Ephemeral agent planning files live in lhzn-io/mariner-agent-lab
+# (docs/planning/lazy-buoy/), never in this public repository.
+task.md
+implementation_plan.md
+walkthrough.md
