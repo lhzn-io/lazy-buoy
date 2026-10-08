@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700" width="1000" height="700" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <title>Proposed ESP32-S2 Feather power supervisor for lazy-buoy (not built)</title>
+  <defs>
+    <style>
+      .box { stroke: #333; stroke-width: 1.4; }
+      .new { stroke: #2e7d32; stroke-width: 2; stroke-dasharray: 6 3; }
+      .pwr { stroke: #c62828; stroke-width: 3; fill: none; }
+      .data { stroke: #1565c0; stroke-width: 2; fill: none; }
+      .rf { stroke: #6a1b9a; stroke-width: 2.5; fill: none; }
+      .t { fill: #111; text-anchor: middle; }
+      .h { font-weight: bold; }
+      .s { font-size: 11px; fill: #444; }
+      .fuse { stroke: #333; stroke-width: 1.2; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1000" height="700" fill="#ffffff"/>
+  <text x="20" y="30" font-size="17" class="h">Proposed: ESP32-S2 Feather power supervisor (not built)</text>
+
+  <g transform="translate(560,16)" font-size="11">
+    <line x1="0" y1="8" x2="26" y2="8" class="pwr"/><text x="32" y="12">DC positive</text>
+    <line x1="110" y1="8" x2="136" y2="8" class="data"/><text x="142" y="12">serial / logic</text>
+    <line x1="230" y1="8" x2="256" y2="8" class="rf"/><text x="262" y="12">RF coax</text>
+    <rect x="320" y="0" width="26" height="16" fill="#f1f8e9" class="new" rx="3"/><text x="352" y="12">new part</text>
+  </g>
+
+  <!-- existing power -->
+  <rect class="box" x="20" y="70" width="190" height="60" rx="6" fill="#e8f5e9"/>
+  <text class="t h" x="115" y="95">LiFePO4 battery</text>
+  <text class="t" x="115" y="113">12.8 V, 16 Ah</text>
+
+  <line class="pwr" x1="210" y1="90" x2="250" y2="90"/>
+  <rect class="fuse" x="250" y="78" width="56" height="24" rx="4" fill="#64b5f6"/>
+  <text class="t" x="278" y="95" font-size="12">F2 15 A</text>
+  <line class="pwr" x1="306" y1="90" x2="340" y2="90"/>
+
+  <rect class="box" x="340" y="55" width="200" height="120" rx="6" fill="#e3f2fd"/>
+  <text class="t h" x="440" y="100">Victron BlueSolar</text>
+  <text class="t h" x="440" y="118">MPPT 75/15</text>
+  <text class="t s" x="440" y="136">load output: always on</text>
+  <text x="348" y="94" font-size="12">BATT</text>
+  <text x="532" y="94" font-size="12" text-anchor="end">LOAD</text>
+  <text x="532" y="166" font-size="12" text-anchor="end">VE.Direct</text>
+
+  <line class="pwr" x1="540" y1="90" x2="565" y2="90"/>
+  <rect class="fuse" x="565" y="78" width="56" height="24" rx="4" fill="#ffb74d"/>
+  <text class="t" x="593" y="95" font-size="12">F3 5 A</text>
+  <line class="pwr" x1="621" y1="90" x2="650" y2="90"/>
+
+  <rect class="new" x="650" y="62" width="130" height="56" rx="6" fill="#f1f8e9"/>
+  <text class="t h" x="715" y="85">Relay, NC contact</text>
+  <text class="t s" x="715" y="102">coil off = Pi powered</text>
+
+  <line class="pwr" x1="780" y1="90" x2="800" y2="90"/>
+  <rect class="box" x="800" y="62" width="180" height="56" rx="6" fill="#fff3e0"/>
+  <text class="t h" x="890" y="85">Klunoxj buck</text>
+  <text class="t s" x="890" y="102">12 V to 5 V, 5 A</text>
+  <line class="pwr" x1="890" y1="118" x2="890" y2="200"/>
+  <text x="898" y="165" font-size="12">USB-C</text>
+
+  <!-- Pi -->
+  <rect class="box" x="780" y="200" width="200" height="130" rx="6" fill="#e0f2f1"/>
+  <text class="t h" x="880" y="228">Raspberry Pi 5</text>
+  <text class="t s" x="880" y="248">+ AI HAT+ (Hailo-8L)</text>
+  <text class="t s" x="880" y="270">GPIO14/15 UART</text>
+  <text class="t s" x="880" y="286">J2 power-button pads</text>
+  <text class="t s" x="880" y="306">RFM9x bonnet and VE.Direct</text>
+  <text class="t s" x="880" y="320">USB cable removed</text>
+
+  <!-- supervisor supply -->
+  <line class="pwr" x1="115" y1="130" x2="115" y2="230"/>
+  <rect class="fuse" x="85" y="230" width="60" height="24" rx="4" fill="#fff59d"/>
+  <text class="t" x="115" y="247" font-size="12">F4 1 A</text>
+  <line class="pwr" x1="115" y1="254" x2="115" y2="290"/>
+  <rect class="new" x="20" y="290" width="190" height="64" rx="6" fill="#f1f8e9"/>
+  <text class="t h" x="115" y="313">12 V to 5 V regulator</text>
+  <text class="t s" x="115" y="330">low quiescent current</text>
+  <text class="t s" x="115" y="345">+ Schottky diode to Feather USB pin</text>
+  <line class="pwr" x1="210" y1="322" x2="300" y2="322"/>
+
+  <!-- battery sense divider -->
+  <line class="data" x1="60" y1="130" x2="60" y2="200" stroke-dasharray="3 3"/>
+  <text x="66" y="185" font-size="11" fill="#1565c0">divider to ADC</text>
+
+  <!-- Feather stack -->
+  <rect class="new" x="300" y="260" width="300" height="200" rx="8" fill="#f1f8e9"/>
+  <text class="t h" x="450" y="286">Adafruit ESP32-S2 Feather (STEMMA QT)</text>
+  <text class="t s" x="450" y="304">stacked with RFM95W LoRa FeatherWing, 915 MHz</text>
+  <text x="312" y="330" font-size="12">USB pin: 5 V in</text>
+  <text x="312" y="350" font-size="12">A pin: battery divider</text>
+  <text x="312" y="370" font-size="12">UART A: VE.Direct</text>
+  <text x="312" y="390" font-size="12">UART B: Pi GPIO14/15</text>
+  <text x="312" y="410" font-size="12">GPIO: relay coil</text>
+  <text x="312" y="430" font-size="12">GPIO: J2 optocoupler</text>
+  <text x="588" y="350" font-size="12" text-anchor="end">SPI: LoRa wing</text>
+  <text x="588" y="370" font-size="12" text-anchor="end">STEMMA QT: spare</text>
+  <text x="588" y="450" font-size="11" fill="#444" text-anchor="end">pins chosen at build</text>
+
+  <!-- VE.Direct -->
+  <rect class="new" x="300" y="190" width="170" height="44" rx="6" fill="#f1f8e9"/>
+  <text class="t" x="385" y="208" font-size="12">Level shifter</text>
+  <text class="t s" x="385" y="224">VE.Direct 5 V to 3.3 V</text>
+  <polyline class="data" points="440,175 440,190"/>
+  <line class="data" x1="385" y1="234" x2="385" y2="260"/>
+
+  <!-- relay control -->
+  <polyline class="data" points="600,410 715,410 715,118"/>
+  <text x="722" y="250" font-size="11" fill="#1565c0">coil drive</text>
+
+  <!-- UART to Pi -->
+  <polyline class="data" points="600,390 760,390 760,270 780,270"/>
+  <!-- J2 -->
+  <rect class="new" x="640" y="450" width="130" height="44" rx="6" fill="#f1f8e9"/>
+  <text class="t" x="705" y="468" font-size="12">Optocoupler</text>
+  <text class="t s" x="705" y="484">across Pi J2 pads</text>
+  <line class="data" x1="600" y1="430" x2="640" y2="465"/>
+  <polyline class="data" points="770,472 800,472 800,330"/>
+
+  <!-- LoRa antenna -->
+  <line class="rf" x1="450" y1="460" x2="450" y2="520"/>
+  <rect class="box" x="360" y="520" width="180" height="44" rx="6" fill="#fce4ec"/>
+  <text class="t" x="450" y="539">existing SMA bulkhead</text>
+  <text class="t s" x="450" y="555">915 MHz LoRa antenna (u.FL pigtail)</text>
+
+  <!-- notes -->
+  <rect x="20" y="590" width="960" height="96" rx="6" fill="#fafafa" stroke="#999"/>
+  <text x="32" y="612" class="h" font-size="12">Supervisor behavior (proposed)</text>
+  <text x="32" y="630" font-size="12">Owns VE.Direct and relays it to the Pi; reports battery and solar over LoRa even while the Pi is off.</text>
+  <text x="32" y="647" font-size="12">Pi heartbeat over UART; if lost while the battery is healthy, energize the relay 10 s to power-cycle the Pi (rate limited).</text>
+  <text x="32" y="664" font-size="12">Low battery: ask the Pi to shut down, wait for halt, then cut power; restore on measured solar input. J2 wakes a halted Pi.</text>
+  <text x="32" y="681" class="s">Fail-safe: with the ESP32 off or resetting, the relay coil is de-energized and the NC contact keeps the Pi powered.</text>
+</svg>

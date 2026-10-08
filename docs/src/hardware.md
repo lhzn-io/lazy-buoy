@@ -65,6 +65,62 @@ about 23 V against a 75 V limit; 5.6 A against a 15 A limit).
 * Confirm which USB devices sit on the hub and which on the Pi's own ports.
 * Measure the 30 W panel's open-circuit voltage and short-circuit current in full
   sun; daily yields of 0 to 20 Wh on 2026-10-06 and 2026-10-07 are unexplained.
-* Consider an always-on low-power supervisor that reports battery state while the
-  Pi is off and can switch the buck converter input independently of the MPPT load
-  output.
+* Build the always-on supervisor proposed below.
+
+## Proposed: ESP32-S2 power supervisor (not built)
+
+Status: design sketch for a later build. Nothing in this section is installed.
+
+The current design has no way to observe or restart the node while the Pi is off
+or hung. An always-on microcontroller on its own supply would report battery and
+solar state over LoRa, restart a hung or halted Pi, and take over LoRa from the Pi.
+The proposal uses parts already on hand:
+
+* Adafruit ESP32-S2 Feather with STEMMA QT (Wi-Fi only, two hardware UARTs)
+* Adafruit LoRa Radio FeatherWing, RFM95W 900 MHz, stacked on the Feather
+
+![Proposed ESP32-S2 supervisor wiring](images/esp32_supervisor_proposed.svg)
+
+### Connections
+
+| From | To | Purpose | Notes |
+| :--- | :--- | :--- | :--- |
+| Battery positive, new fuse F4 (1 A) | 12 V to 5 V regulator, then Schottky diode | Always-on supervisor supply | Low quiescent current regulator; the diode keeps a USB-C cable on the Feather from back-feeding the regulator |
+| Regulator output | Feather USB pin | 5 V input | |
+| Battery positive through a resistor divider | Feather analog pin | Independent battery voltage | Divide 14.4 V to within the ESP32-S2 ADC range; calibrate against VE.Direct |
+| MPPT VE.Direct port, through a level shifter | Feather UART A | Charge controller telemetry and HEX control | The BlueSolar has one VE.Direct port; the supervisor owns it and the VE.Direct USB cable is removed from the Pi |
+| Feather UART B | Pi GPIO14 (TXD) and GPIO15 (RXD), plus ground | Heartbeat, telemetry relay, shutdown requests | 3.3 V on both sides; the Pi sensor daemon reads VE.Direct data from this link |
+| Feather GPIO | Relay coil (driver transistor or relay FeatherWing) | Hard power-cycle of the Pi | Relay contact in series between F3 and the buck converter input, wired on its normally-closed (NC) contact |
+| Feather GPIO | Optocoupler across the Pi 5 J2 power-button pads | Wake a halted Pi without cutting power | Equivalent to pressing the Pi's power button |
+| LoRa FeatherWing (SPI) | Existing 915 MHz SMA bulkhead, u.FL pigtail | Telemetry and signed commands | Replaces the RFM9x on the Pi GPIO header; CS, RST and IRQ are solder jumpers on the wing |
+| Feather STEMMA QT | Spare | Optional current sensor on the Pi feed | |
+
+Pin assignments on the Feather are chosen at build time and recorded here.
+
+### Behavior
+
+* **Fail-safe:** with the supervisor off, resetting, or removed, the relay coil is
+  de-energized and the NC contact keeps the Pi powered. The supervisor can only add
+  restart paths; it cannot be the cause of a blackout.
+* **Heartbeat:** the Pi sends a heartbeat over UART. If it stops for a set time (for
+  example 10 minutes) while the battery is healthy, the supervisor energizes the
+  relay for 10 s to power-cycle the Pi, with a daily limit and backoff so a Pi that
+  cannot boot does not cycle continuously.
+* **Low battery:** the supervisor asks the Pi to shut down, waits for the halt, then
+  cuts power. It restores power when VE.Direct reports real solar input, rather than
+  inferring sun from battery voltage. The MPPT load output stays on permanently, and
+  the load-disconnect trip used today is no longer needed.
+* **Remote visibility:** battery voltage, solar power, and charge state go out over
+  LoRa every few minutes whether or not the Pi is running. The radio listens briefly
+  after each transmission for commands.
+* **Command security:** LoRa is a broadcast medium, so power-cycle and shutdown
+  commands carry an HMAC with a shared key and a counter to prevent replay.
+
+### To verify during the build
+
+* VE.Direct signal levels on this BlueSolar (5 V or 3.3 V) and the level shifter choice.
+* Relay contact rating for the buck converter input (at least 5 A at 12 V DC, sized
+  for converter inrush).
+* Supervisor average current, target a few milliamps at 12 V (about 1 to 2 percent of
+  the node load).
+* A receiving station in the lab that can also transmit commands back to the buoy.
