@@ -51,7 +51,13 @@ class RtlSdrReceiver(SdrReceiver):
         sdr_settings = config_dict.get("sdr_settings", {})
         self.sample_rate = sdr_settings.get("sample_rate_hz", 1024000)
         self.output_rate = sdr_settings.get("output_sample_rate_hz", 16000)
-        self.squelch_level = sdr_settings.get("squelch_level", 25)
+        
+        # If NOAA is enabled, disable squelch for continuous streaming.
+        if config_dict.get("noaa_enabled", False):
+            self.squelch_level = 0
+        else:
+            self.squelch_level = sdr_settings.get("squelch_level", 25)
+            
         self.gain = sdr_settings.get("gain_db", 40.0)
         self.logger.info(
             f"Configured RTL-SDR: Frequencies={self.frequencies}, "
@@ -375,6 +381,7 @@ class RtlAirbandReceiver(SdrReceiver):
                     f"        name = \"{ch['name']}\";",
                     f"        freq = {ch['freq']:.3f};",
                     "        modulation = \"nfm\";",
+                    "        squelch_snr_threshold = 12;",
                     "        outputs: (",
                     "          {",
                     "            type = \"file\";",
@@ -425,8 +432,6 @@ class RtlAirbandReceiver(SdrReceiver):
         try:
             self.process = subprocess.Popen(
                 cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
                 bufsize=0
             )
         except Exception as e:

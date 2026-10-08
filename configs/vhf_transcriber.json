@@ -60,7 +60,7 @@
     "device_type": "rtl-airband",
     "sample_rate_hz": 1024000,
     "output_sample_rate_hz": 16000,
-    "squelch_level": 150,
+    "squelch_level": 25,
     "audio_threshold": 300.0,
     "gain_db": 40.0
   },
