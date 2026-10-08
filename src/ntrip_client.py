@@ -13,9 +13,13 @@ import glob
 import os
 import json
 
+# Sensor daemon logs, relative to this file so the path follows the checkout
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+GPS_SERIAL = "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00"
+
 def get_latest_coords():
     # Read the latest loc from the JSON logs to feed NYSNet without fighting the sensor daemon for the serial port
-    log_files = sorted(glob.glob("/home/pi/Projects/lhznbuoy/logs/sensor_data_*.log"))
+    log_files = sorted(glob.glob(os.path.join(LOG_DIR, "sensor_data_*.log")))
     if not log_files: 
         return None, None
     try:
@@ -136,7 +140,8 @@ if __name__ == "__main__":
     parser.add_argument('--mountpoint', type=str, required=True, help="Mountpoint (e.g., NYRY_RTCM3)")
     parser.add_argument('--user', type=str, required=True, help="NTRIP Username")
     parser.add_argument('--password', type=str, required=True, help="NTRIP Password")
-    parser.add_argument('--serial', type=str, default='/dev/ttyACM0', help="GPS Serial Port (default: /dev/ttyACM0)")
+    # by-id name survives USB re-enumeration (ttyACM0 -> ttyACM1 after a replug)
+    parser.add_argument('--serial', type=str, default=GPS_SERIAL, help=f"GPS Serial Port (default: {GPS_SERIAL})")
     parser.add_argument('--baud', type=int, default=9600, help="Serial Baudrate (default: 9600)")
     
     args = parser.parse_args()
